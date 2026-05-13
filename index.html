@@ -3,12 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- 關鍵修正：解除防盜連 -->
+    <meta name="referrer" content="no-referrer">
+    
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="空地空屋巡檢">
+    <meta name="apple-mobile-web-app-title" content="空地巡檢">
     <meta name="theme-color" content="#020617">
     
-    <link rel="apple-touch-icon" href="app-icon.png">
+    <link rel="apple-touch-icon" href="app-icon.svg">
+    <link rel="icon" type="image/svg+xml" href="app-icon.svg">
     <link rel="manifest" href="manifest.json">
 
     <title>115年南投縣空地空屋巡檢地圖系統</title>
@@ -54,6 +59,10 @@
         @keyframes user-ping { 75%, 100% { transform: scale(2); opacity: 0; } }
 
         .safe-top-padding { padding-top: max(1rem, env(safe-area-inset-top)); }
+        
+        /* 圖片預覽器平滑顯示過渡 */
+        #lightbox { transition: opacity 0.3s ease; }
+        #lightbox-img { transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease; }
     </style>
 </head>
 <body>
@@ -62,7 +71,7 @@
     <div id="splash-screen" class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-950">
         <div class="relative flex items-center justify-center w-32 h-32 mb-8">
             <div class="absolute inset-0 rounded-full border-2 border-amber-500 pulse-ring"></div>
-            <i class="ph ph-house-line text-6xl text-amber-400 drop-shadow-[0_0_15px_rgba(245,158,11,0.8)]"></i>
+            <img src="app-icon.svg" class="w-24 h-24 relative z-10 drop-shadow-[0_0_15px_rgba(245,158,11,0.5)]" alt="Logo" onerror="this.src='https://placehold.co/100/1e293b/f59e0b?text=APP'">
         </div>
         <h1 class="text-3xl font-bold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500 mb-2">空地空屋巡檢</h1>
         <p class="text-slate-400 tracking-widest text-sm uppercase">115年 專案查報系統</p>
@@ -85,12 +94,25 @@
         </div>
     </div>
 
+    <!-- 🌟 新增：專屬圖片預覽器 (Lightbox) 🌟 -->
+    <div id="lightbox" class="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-md hidden flex-col items-center justify-center opacity-0 p-4" onclick="closeLightbox()">
+        <div class="absolute top-6 right-6 z-10 bg-slate-800/80 rounded-full w-10 h-10 flex items-center justify-center cursor-pointer hover:bg-slate-700 text-white border border-slate-600 shadow-xl" onclick="closeLightbox(); event.stopPropagation();">
+            <i class="ph-bold ph-x text-xl"></i>
+        </div>
+        <div id="lightbox-loading" class="absolute flex flex-col items-center justify-center gap-3 text-amber-400 z-0">
+            <i class="ph ph-spinner animate-spin text-5xl"></i>
+            <span class="text-sm font-bold tracking-widest">載入高畫質原圖...</span>
+        </div>
+        <!-- 圖片在此顯示 -->
+        <img id="lightbox-img" src="" class="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl relative z-10 scale-95 opacity-0" onclick="event.stopPropagation();">
+    </div>
+
     <!-- PWA 安裝提示 -->
     <div id="pwa-prompt" class="fixed top-4 left-4 right-4 z-[9997] bg-orange-600 text-white p-4 rounded-xl shadow-2xl flex items-start gap-3 hidden transition-transform translate-y-[-150%]">
         <i class="ph-fill ph-info text-2xl"></i>
         <div class="flex-1">
             <h4 class="font-bold mb-1">將系統加入主畫面</h4>
-            <p class="text-sm opacity-90 leading-tight">點擊瀏覽器下方的「分享」按鈕，選擇「加入主畫面」，即可像 App 一樣全螢幕使用！</p>
+            <p class="text-sm opacity-90 leading-tight">點選下方「分享」按鈕，選擇「加入主畫面」，即可像原生 App 一樣使用！</p>
         </div>
         <button onclick="hidePwaPrompt()" class="text-white opacity-70 hover:opacity-100 cursor-pointer"><i class="ph ph-x text-lg"></i></button>
     </div>
@@ -126,9 +148,7 @@
             </div>
             
             <!-- 單一階層：鄉鎮市橫向浮動按鈕 -->
-            <div class="flex gap-2 overflow-x-auto no-scrollbar py-1 mb-2 w-full touch-pan-x" style="-webkit-overflow-scrolling: touch;" id="township-selector">
-                <!-- JavaScript 動態生成小膠囊按鈕 -->
-            </div>
+            <div class="flex gap-2 overflow-x-auto no-scrollbar py-1 mb-2 w-full touch-pan-x" style="-webkit-overflow-scrolling: touch;" id="township-selector"></div>
 
             <!-- 戰情進度儀表板 -->
             <div class="w-full px-1">
@@ -147,13 +167,11 @@
             <h3 id="list-main-title" class="text-lg font-bold text-amber-400 mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
                 <i class="ph-fill ph-list-bullets"></i> 巡檢清單
             </h3>
-            <div id="list-container" class="flex flex-col gap-4">
-                <!-- JavaScript 動態階層式生成清單 -->
-            </div>
+            <div id="list-container" class="flex flex-col gap-4"></div>
         </div>
 
         <!-- 5. 底部資訊與多照片面板 -->
-        <div id="bottom-sheet" class="pointer-events-auto absolute bottom-0 left-0 bottom-sheet hidden-sheet glass-panel w-full rounded-t-3xl p-5 pb-8 shadow-[0_-20px_50px_rgba(0,0,0,0.8)] max-h-[60vh] overflow-y-auto flex flex-col z-[60]" style="touch-action: pan-y;">
+        <div id="bottom-sheet" class="pointer-events-auto absolute bottom-0 left-0 bottom-sheet hidden-sheet glass-panel w-full rounded-t-3xl p-5 pb-8 shadow-[0_-20px_50px_rgba(0,0,0,0.8)] max-h-[85vh] overflow-y-auto flex flex-col z-[60]" style="touch-action: pan-y;">
             
             <div class="flex justify-between items-center mb-4">
                 <div class="w-8 h-1.5"></div>
@@ -165,7 +183,7 @@
             
             <div id="sheet-content" class="flex-1">
                 <div class="flex justify-between items-start mb-4 border-b border-slate-700/50 pb-4">
-                    <div>
+                    <div class="pr-2">
                         <h3 class="text-lg font-bold text-white mb-1" id="sheet-title">點位名稱</h3>
                         <div class="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded inline-block" id="sheet-id-badge">編號</div>
                     </div>
@@ -174,22 +192,32 @@
                     </button>
                 </div>
                 
-                <div class="text-sm text-slate-300 mb-5 w-full bg-slate-900/50 p-3 rounded-xl border border-slate-700/50" id="sheet-desc">詳細資訊</div>
+                <div class="text-sm text-slate-300 mb-4 w-full bg-slate-900/50 p-3 rounded-xl border border-slate-700/50" id="sheet-desc">詳細資訊</div>
                 
+                <!-- 🌟 修正：原地圖點位參考照片 (改為條列式按鈕) -->
+                <div class="mb-4 bg-slate-800/80 p-4 rounded-xl border border-slate-600/80 hidden" id="ref-photos-section">
+                    <h4 class="text-sm font-bold text-slate-200 flex items-center gap-2 mb-3">
+                        <i class="ph-fill ph-image text-emerald-400 text-lg"></i> 原地圖點位參考照片
+                    </h4>
+                    <div id="ref-photo-grid" class="flex flex-col gap-2">
+                        <!-- 動態插入原圖連結按鈕 -->
+                    </div>
+                </div>
+
                 <!-- 照片上傳區 -->
                 <div class="mb-5 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
                     <div class="flex justify-between items-center mb-3">
                         <h4 class="text-sm font-bold text-slate-300 flex items-center gap-2">
-                            <i class="ph-fill ph-camera text-amber-400"></i> 現地查報照片
+                            <i class="ph-fill ph-camera text-amber-400 text-lg"></i> 拍攝新照片
                         </h4>
                         <label class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-lg">
-                            <i class="ph ph-upload-simple text-base"></i> 拍攝上傳
+                            <i class="ph ph-upload-simple text-base"></i> 點擊拍攝
                             <input type="file" accept="image/*" multiple class="hidden" onchange="handlePhotoUpload(event)">
                         </label>
                     </div>
                     <div id="photo-preview-grid" class="grid grid-cols-3 gap-2 mb-3 empty:hidden"></div>
                     <button id="btn-upload-drive" onclick="uploadPhotosToDrive()" class="w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white text-sm font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors mt-2 cursor-pointer shadow-lg">
-                        <i class="ph-fill ph-folder-notch text-lg text-amber-400"></i> 同步至 115年空地空屋 雲端資料夾
+                        <i class="ph-fill ph-folder-notch text-lg text-amber-400"></i> 上傳建立資料夾並填表
                     </button>
                 </div>
 
@@ -210,100 +238,99 @@
          JavaScript 詳細設定與核心邏輯 
          ========================================== -->
     <script>
-        // 🚨 GAS 雲端資料庫網址 (已自動寫入您最新部署的網址！)
-        const GOOGLE_APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyLHvYPz6eJoiWOAXpGL-tFInwel8EnaHUYXPNHR04Z10n_FcI-zxALMfHCRzn5xg-TnA/exec"; 
+        // 🚨 這裡必須填寫您最新部署的 GAS 網址！！！
+        const GOOGLE_APP_SCRIPT_URL = "👉請在此貼上您最新部署產生的網址👈"; 
         
         const SYSTEM_PASSWORD = "54004658";
 
-        // --- 完整空地空屋 KML 解析資料庫 ---
+        // 🌟 KML 照片網址資料庫
         const mapData = {
             "nantou": {
                 name: "南投市",
                 points: [
-                    { id: "A-1000801016-00003", name: "三塊厝33-3地號", lat: 23.90061, lng: 120.69019, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000801016-00004", name: "三塊厝76-104地號", lat: 23.90058, lng: 120.69046, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000801016-00005", name: "三塊厝76-110地號", lat: 23.90057, lng: 120.69033, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000801033-00001", name: "光興段750地號", lat: 23.94243, lng: 120.69679, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000801018-00001", name: "茄苳腳段469-28地號", lat: 23.89375, lng: 120.67518, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000801027-00002", name: "首區段100地號", lat: 23.95301, lng: 120.68622, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000801027-00004", name: "首區段106地號", lat: 23.95278, lng: 120.68631, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000801029-00002", name: "福溪段82地號", lat: 23.92547, lng: 120.69025, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000801029-00001", name: "福溪段86地號", lat: 23.92492, lng: 120.6905, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000801003-00001", name: "藍田段7地號", lat: 23.91087, lng: 120.68195, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000801015-00002", name: "南投高中校外空地", lat: 23.90801, lng: 120.68288, agency: "教育部", unit: "南投高中" },
-                    { id: "B-1000801005-00001", name: "南投高中校外眷舍", lat: 23.90795, lng: 120.68308, agency: "教育部", unit: "南投高中" },
-                    { id: "B-1000801031-00001", name: "中興新村基地", lat: 23.95632, lng: 120.6892, agency: "文化部", unit: "國立臺灣工藝研究發展中心" },
-                    { id: "Q-10008-00047", name: "南投酒廠-廠房拆除及新建", lat: 23.92129, lng: 120.70491, agency: "財政部", unit: "南投酒廠" }
+                    { id: "A-1000801016-00003", name: "三塊厝33-3地號", lat: 23.90061, lng: 120.69019, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GzEnRiQU58_yTkOfVwmi1ksAN_0dqZFAOjusvoXzwZPBXV2MGwgEIDSLKqYKyWigB7VTRZy0bags6nJJaFs2jwAuKafpAdqeN6IhidpnWBcpDGnBYZJwC5t3R9zYcT7mj63He7R3rNzmBL3zu2inVuoMQqgpaRyYOFPqDgarQeAQZGvaNp9zURoOUd2_gqxg3JCMiVQijhVAvmwjnnFqC7hDEjqGY_CjautkQma5uft-10nuqZF_hY-SnY?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GxoDWYWc99K2-a-oJkgsxCMEW2UdjuYuFzyAJg0N5yw57rEU1GAhH_OqBWny6qHoUnS-5Hi-Ot5B4oCCubqDOzT95DpEuCpINQSKJhjchUTIGD_cZnQjUr9Zu7NurA5grizyf5vyFf8QhP92zjP_5AtUhcxp9GcTMaKLBVKrSSw0kPvIgsPr_AFHaaY3MO21ZW7g_oLiW6-683QXZdVHNjbLrtQMlq98u6fWKT6C5a6fq7RPn5XjBD3B54?authuser=0&fife=s16383"] },
+                    { id: "A-1000801016-00004", name: "三塊厝76-104地號", lat: 23.90058, lng: 120.69046, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gwv3GzLEz_V76FhxNqvkqGtYCLam1l1OcdR_odOBGN1svStl-o8PbKVfWuUgYDm6OGPYABJ_mzQL6qYnFYVS9d_Ror1bTzmlcq8_20U57YURBOaFiuSemAlC_S5kN9zVcHRD_50PnignE5k_lUfjez_xYJukGMZQpvGSdjwpYlaA_JU22lOn501WaBeeZnXBQY2IqVBzIsZNlkb5_aT1xeyEyWyDQEt2GKk2sIzEmcfpAfrD0TRBO1nXSs?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GzjkvmEc_yigrcNtNrRYmo3RWG9NjxOwC0ixcMrJLu48HRxjydFcHR2K0CE8qcsfjmUjju5F4EeVKQ_MvTtk_j4_av0QH6uoDybi9M0D3UHIdLUlBRXIjH_83BjUOshVd-gau2XzhbNqxGPi4HVY-By8-fqk5FCG-qb-Xc11tYNVgH3Qz-YBnjC18_6mZM8GaD49-GQq-EB9pGCqkA6cuhZs3DViqor9-NGH-Xt2duONanWejsUh2Zz9SM?authuser=0&fife=s16383"] },
+                    { id: "A-1000801016-00005", name: "三塊厝76-110地號", lat: 23.90057, lng: 120.69033, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gypq9Bp0Squecde077SqTj2nO0LJMTILP2hAzBb5U710u14JDLtkX5GQU6CP7rJSFgvZlKRwfT26MDGFJ968ZTiHGXRp-q4LhqQHVlU0oxJHmti5Z5mVWjCDDNGR05Q_futfXcm5ab0kD2-NmHVptqhwevYDwrskkY1b8GqCDT3Lm0hJ44qiB7UjJpQ9rTaBhCWoX9tWnCg77rhwgwHuciZFPn9xo0rxSDYFufuq854LXhifzCkImKSN48?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gzfh-MgknJ7FyjXqwUlgtviTyas6HmgpTUwvU6LbmAe6RNameI1kD9bXzPYJ687ZO_aLEIghoTnEcfdCY5X9RwNSrt5RcHrwyHjElSJxs-SnaewLq2LYlo8tmd3PjLsSXuj8MsJTFT3Z14IGH37Oxihj8IDBcfN_DClbKnJZZrpMCe-k0Q7zeJweLH1-Fhfp6vZ-zWGYHLwugR1byCdikR-OxVG-I4_UCNfG4y-6SEmVWoYXblCjk7pJkw?authuser=0&fife=s16383"] },
+                    { id: "A-1000801033-00001", name: "光興段750地號", lat: 23.94243, lng: 120.69679, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gzx2c9OmJguPTdRpr1U8TBQDX-Vx0v6GpBjM13Oa4s50g0GT9-kTPLO-TSC2akpzaXlsdenV-KEu9uqKiCqTYD4mC5h4J_CQVx7dlwG3F65jt-fOziDGdtDCIqa3ytCpYYm93-qFTnmJ-cUTlAPeGiMFFRjMoXFCgMFxKx57vkYTv-4OPRc1Eh-2pD8lulFUiL-9PiStvbCMtuRRscJzwkbSkyLQNGkCiCIwGN-4grYeuSGlu10g6V5q8w?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gw-geeKa20HbLFC9dym1oyYe3KBdbcy9LeZqB2YdjHTffbYY7LRFNrufkH8Kc5xHGu3iVun5IWWBdy0Zp1GaMLOH1H3b8PWVa23eDtnCcnIaoe-eHYBGe1p2L3DzjoEcn7rtzdXB8WUeMYxjC8f4hQvUO4PSlT0wKzpj5gRc5svup9TdaRJoiymG_PfIryJz3nGzGA0Myhi-Nd84WDT66jpEk3mmqUbUT7Pq6d2E4idhnL1BP5awFP89bo?authuser=0&fife=s16383"] },
+                    { id: "A-1000801018-00001", name: "茄苳腳段469-28地號", lat: 23.89375, lng: 120.67518, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gze5EHQQVWWHLNMRiz5sRQedElNVzAzM6ryzPNqlgup-2q8zlCSRFxszX4F4bXV7Lv0xaXVolw06XHkj-7RCG_oojjmfK8w4YL65FyEzs_X_2HmZ_ynQDPXhVMEsKik6JiYZj6vCAXX65rLidHZJ7JQkHajVev1_8yKTcQEkAzCfz1NTASG25YtAZsCHyjhPgwD0aOsiat_Ub6bJbauh5-1GJcXuKqarFDuBO8Za6sONPsXbFwJKNyXuZ0?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GylKwLmDC9BvDRISY8OqBEqd4CtOJNmF8zt5kY5492HkiXRvAn4Jz5xV4AYBoSue2iCiXmVrklJiBVMhGHrfDpEFY8UVFHNEirEQ4JNE738P2e6gdypLATxdyOhjBjOUjIacLdw61MNIGH-p9m6wFklITLAgaeI0EZ8pn5cAx8jk2CBu9zYRNjfXIaZujh0No28sAMaYAYFx3Wvf_Aai9tWemRweENsoMHYwW-wauGsGlP1R6TP824sMBY?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GwBgHCDcmGVgJcssV2pwhxzP1796wCX8qvvnVSthVnaZyV9t3pKq6XOCCOATm40_6omvgmC7pmwUII_bq4oumWUsuiIJVdwE1gwEF2dbOWXH6Ew8e4HoNEk3GsVz00FPWm1WwqRmju5sxh0RcB2BbeUHfv1G1VTRBdC5q88IBQvv50YxYJcE-m1ksQ1-tpLt7ep3DtLnL2OQIsOZSgedB-jokmZq0yM3AaYZviXijjM4YaSLA5xVx7qqwo?authuser=0&fife=s16383"] },
+                    { id: "A-1000801027-00002", name: "首區段100地號", lat: 23.95301, lng: 120.68622, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gynteob_d7-VfZosrp4Tw9Q7sz-mv_BzDxgUeYfLA1EN_HenEZ8eqFzQkXBIY50Imc3AHypJ8wPKi2fVecfPFTMchJnlP5oZEsk1e5HdPMe8T3qwNyKE0AJteId8xmI1qftgYKJHyf5wNjtyk6tqUrmrBKYag3VLZr6mP-1NhOomI4NM0N8pbOIIjt0eIGIR4sWKNHOKcSuh3bmUtS2ROaTIwsR0cp_gGsx0BYLjm-WgsLYjebahaw0_C8?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GzIMxz5rKEQaNTasA_vq5_szEhrrrWeFnmP6LLNzio1NDpcNCGqTxkCchU7_Q0JMeIlurPVRSp_iJDibcvg2X5xXeWUqS5eaM-rgQqEDZ2gSWOnFcmqDZXvM7ruJ5X9qQe3A_Wa1Wq61k3T5U8q9PlNQ8IhfSbT2CUiFPyw6kqz9XSlfiKRemGaeSn8SPQiNhemK9s7lKNvWpK6fb7drsC40RU90Mu5pJVW-vSJuzrmZPMFD9h6_58je9Q?authuser=0&fife=s16383"] },
+                    { id: "A-1000801027-00004", name: "首區段106地號", lat: 23.95278, lng: 120.68631, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gyq-OLoZOM8E8pEceSlp3b0liJqKmzMPu12uWR1eCHrDe6qEtP5T8xY14vdOdFkjB6JFoG1dLtqkxI5cTW5FLJNf-_DD88V-0Zae4r9i_EIYswzq_CrM4imFp-3LZ2v6_JyTXOKGX4j2TB3yUwYPiCK_HPEbJ_0StK8H76j136XFBIw3vkLbypJJJBNoHSnXmlmrti0qrvzvIG67Zm6ahARj6t32fFijG7xykD2osH66z-GpSMqnAQaa7Y?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gwk6-KzkUffBaD02IhSF0eWv_CY9DAv5gSn6Ta_tz-N97Fd_x6wgoCxtpMbIMHtKJm9lh714N2gzCiu26tJtXc5JdLjruJJdwcmXCV_R0wTdKfOL1OIk77_IuYmVUk00NQosGPMWJaz1XaD5G_SiTK1slgt6wzw6amJO0K-xob07Ja0wKpJ2W8NSO85FxAElMiRXKdyfugrAc6QA3PUFFSBtFCsFrolJ2lciqYY3ebmqXy7w8XlZrfPQAc?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GwqbLci7JNuVGj3Ld4ZzURulClawDBwMkQIGO3QZ0u6GgCNLZ2LZc1A05gfOKIZgXFUuWVy1YK6B5UAAwNO9wFOwZZHsaovt8TkuhyJE828_Gf7ukoctRDaUvMp5mBBLJF5MDQV6O75m0kRtu6dbwvuEVkt-pOsWmoDVTAByzBSF0p3U7v6RFKiDXuXa3Jt7KR9wZIufOfJ6Sua7SxB3Xhc1XoecJ3RxW-O5emDB0fKbiwIHTz1tImxcgY?authuser=0&fife=s16383"] },
+                    { id: "A-1000801029-00002", name: "福溪段82地號", lat: 23.92547, lng: 120.69025, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GzAuDLJbuEusfCzix3B0A3DeWqYhq3lOvAKAsDtsa1j7rZL-B6uNu7-RkpGcHuHTKmVubdsPHDedSINTPwG-YQATg033LWgErUirHiwDUKibtiKfj2IpNuriKzQqYoRsohRFpMaWCQAlnUGaTTAoCGv-f7m-t5eeCpZduC7G3-MqXxBn71PrVKMgCvexqxuPw_9wsCrBuFHCNksKcgBSNxfuZ1uMk1-lONBvHo_MGQlsHmLaOga2xBgyZM?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gy7CuzJvktCeJTIZGVF60ZYet7JGc6nDTWj9kb9NyCurivX2ikku5DUR8SZ5R8a5VeM-rb13PK2x14EmZgJU8HdA9pW8DqSEQIdWniVzaCPUO4yE-QfyA-6oLnCwjXLV-pUWZLY2OOeQSOp9P4F_Kb6kYztkSMXypRBr0StSPBQcAQisqxYFWkaLtU28RIWmF8KEj2lXPWFTd_ROyVdt1lKB9hVXUZzBz7R5R6ylYACoqlxluiNbu9VlEA?authuser=0&fife=s16383"] },
+                    { id: "A-1000801029-00001", name: "福溪段86地號", lat: 23.92492, lng: 120.6905, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GzOUfKT0h8Qk5oFLgE4fGlFPoOHQSgq0E_aDzSRJdlMjTIj9KuU2sLWLPSqU9DhKAFN_Y5hgsPFxuBLCJA2VTERQY6PVBFkOAD9s7W4fZR6qN4b0vTDBvTs-i_uUs8N-dBNFPy0mor9M-QrJzILtFx-K-2aIWuijYl42d2wYz2c1L0Gog_qAYem7_HVH5_4quLPEzBMtNB2Waps_TanlCavNXkOWQdO6tcUw5qwNVqXyqS7gbyWetStOHA?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GzSauJH3EbVeKUcXzDqMqLn02Pd_kdcpIFtpqpOzI7d4sOajvPEJOM2jkXiEiALTFPcvflPgaVYLNxHRyF7PIUFDP4YOr8rVHq7I0oQFXkfOmoymad0pFY3Ixk33Wdf0us8GADfoFmMdD2F_2KLIUJoApImdR72VLH0u2rrWPYXpoCS9R_5fgKqVrqun0DheaY3Mzp3SaFj6HGxCXB2aBkNyXV5E2vIfm6tOO1aOVrNxUiaNMx5qO50Wzw?authuser=0&fife=s16383"] },
+                    { id: "A-1000801003-00001", name: "藍田段7地號", lat: 23.91087, lng: 120.68195, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GyIDv9P_EAFPcp3kUlsYyXgsfG9n7UTOvUjl8RaxmhrvZ50UFsH5s7fbBA5_wJTGRGyXR91LPSAcBMN8zFVVR7kDhoVjHnds8R6lN0tGYXOq4onOj6kuNYm4bBnWHY3rUozi3MXz4pdYe8XQerLHUgXqyHxP8EOkpEX0MPMphku6EwoAKsp911mcAVma-QQ6WQ2oYPDvqWR067-g3c12OM5PaZ7_Z3h3LGnZxQrA_ZxglFSTXmC8DpnXqM?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GzSlkEZtVlQrj4zlwGQC1zpjS8nbMgVZohsE6cNXOSUpZYlXUwuplxFFyWMFdS98IRZKXMzLRx1u6CyX2zX1WKlIvIvHhb7ugTtNDP_oWB8rzrefjglfIAvFi5XhoHRQ927JqoaX9wcgoQEtKotgSAfge-bawVJeyrAYY5Q03QdYtdsjYoFFpnsbphlY3Fqn1tX9DgCowMpeBSAScylCKL9eYonqILpatDj6Zo5MS6_Onk7larU_-C4F40?authuser=0&fife=s16383"] },
+                    { id: "A-1000801015-00002", name: "南投高中校外空地", lat: 23.90801, lng: 120.68288, agency: "教育部", unit: "南投高中", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GwVytlHdrsm0f5Xk84Yd73HyY9WP7ZtTRT69GjcAWyDpv-4PuRtDm9ISsCYrj6rT9TmshptwaCXvCd2_EnVcD4ONDgRJcZ55zU-hX0XscWKE27hSbFJqu3s_gXh6dicE5JVKHs_KvlzQ7DsaH7_dhZROxkx9iMY2TsND4PUs1_T3-Namj3zziCopcOQVRFEYhlHIn37Ue_BLjBWogjcNbh0Exdf2OqPl2zqV0AOioVk7Rsx8ACPkJnCVIo?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GwowdYUbrETt-PlE4ZEMubxEzjkyqmxhmvbP-1cxJVJCnkdmxStC_UZLIYeiGg584oAfzgSiGtpbp1GMI4KTOHp38l5Qj9mNK0Wd7OoUliO4oH7kyRnnhba4fAdUJTAH0yOXnFix3T7p-UFDQ7HPSFJVPZbNNzw2eWhvwkYk9mZjGh653Ige_ySPQfRxXwHxG17UswBW5DfoxwGLLmaYPxmpFEc4yPLiaN5EVoN6-zzykUuLXgcsh3aflI?authuser=0&fife=s16383"] },
+                    { id: "B-1000801005-00001", name: "南投高中校外眷舍", lat: 23.90795, lng: 120.68308, agency: "教育部", unit: "南投高中", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GxFmJs9JMLNAT6pXhn9CPid82ynzeqPinruYJQpM1a3bqCBI6QWACv2LIOf_gPS8KaLEnQmTVtRQgyQdkQ2kvcuaBLWDfYiptAp4lo0eBTQzFYVlzk1RjjhtSJDyJ1VwjjEt6ig7F-6Qx4zyvLiRr6gm88FNg7JeCUOZUOquiiY4DkhgqCBt-TdveApRrkPv5NbBgNwieAQfCzQrmIReiX_lulgVma9bHKYJFH4HX6r78Ws_7lvm5q_oP8?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GyRhdftY6sO2esfv3Atux66AKjZN9u6Q9NeBTKXgre_OEFI7o_HwMsE-uLni5C69QLR6dhB_bUOA6CswCI7ugcn3BLrPxECc-pTsR9zqQmg6rceE2I1TQnF1OfOXNSQpGECIy_4GYvO-ugg9moCFrTi-HVz50DrDj5KZyoqk2CbyYsf_wJ2CeSGwlfqogX7vtj43IWGwksi_wlv5887iw8vw0sEUCW-MLWoLRWl8884CHVVXAdoye2wHA4?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GyTux9PCGmDHb4YEAk6cSqFWsr8toUNWS9CyjPP52pndgtABNUhGXZ6JLbQL_w7X-0nfz7C1qnfhT10vFpz2nYDG9bkM3UxoNzsO1xrzVOadzSr2XokQuw6mpbYgDtwEfw3uKgY3EZd65AXzlLD90vaJq1kAGazMTPPEF4siLVWW1Bt-0-EU2Gs4iRM47q3OKOv3nGJ9_ZXj453RC6jCiL2LpBHjZgxxw3UToX4eslTo9jVfm4VQa57zt8?authuser=0&fife=s16383"] },
+                    { id: "B-1000801031-00001", name: "中興新村基地", lat: 23.95632, lng: 120.6892, agency: "文化部", unit: "國立臺灣工藝研究發展中心", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GzmXZT7Ck4LUIkYv5DYs5Jr1qZIbY13SKnORIqW5ZlS5CHjQFUhXrSKWUJ-6ZSm5L7Gg02R5nmMjIt-JxQTm92H3N9Gv--BY3jeX39BPoDfVs0_lpn0n1l06bPwbxrMDuJyo3psNT1Wyg6yJe962NR2Q4rx3NnUYVs3Q6tczbD_Re0VVbrV47pAwGO0bVl2-Innhf8gsDJ1mQri7L_FDMYLyOhokerSu_ecvJX6zyxYLXbc-nMDz4jtWBY?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GwmqYohGdueiLSvpu93Aa17pr5zXtuqN56ztlx-gysIPBfHtZKGDgFIm9-fuQHvq28FznCEKkeo_fXsn6X_BFWflVqORLWy-eKIoqeMRBsk1dHN_k2T5yerOA1saTprsCb_cNTjgrZEMjQWlHGvnWalkZk8kGVrqDZgcPQtjELV3ltIz2f1fQToW2QdEjOjJK9oN5iQYmaDkDYFxpjvpW5lyPNFnb-G-J6Hh5PyQHr9afjo-zrJQjVuSWU?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GzEEMnkWAoE4A-frLV8ay6W6u5V3PbW241BAoNAihC2a3CnQjFELLHWVGX74562GP4dVaYEW9gSjKVbW7Q6wtBoBwaClL6QeR3OYXvEXtz4HNwzVNvlyTKnVKE1AIr16pz-tRizVhu7GNfK9kd2rfmKZa2Q1H-p1UmFNR-H1UG6TOya6eOMKlHgkWVEKLq_ZfketKNd6QbbKP3c3YYBo4b69FzNA6f7tlnySxkw9RN4YRtSp4Kc26CRBRs?authuser=0&fife=s16383"] },
+                    { id: "Q-10008-00047", name: "南投酒廠-廠房拆除及新建", lat: 23.92129, lng: 120.70491, agency: "財政部", unit: "南投酒廠", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GzMiZGClvwFSRpftXIeH5pkOu1daje07DnDZpxt_o_6BXBk4KSWwKZ1kcvBviTzg5KhQQHObTGt492QV8w9whnGYeIV_-ZIEt_mNYNQtwlPNViycNIC3g7nAaJ95Nemu1f1imy7SjLMpHUBwswVCOIa3r9vzLyHUftZT1HsvC-beTNrD8SlW9QE-LlWeRTAb0UIi8N7W2G98iDR48oM96sF1rxD5JWZy_4-8pCjVwy-VwjebOZuUyj4gyY?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GwOFxNB6KAIwLw8GuCSTgB6-l2RbPFL16chzFq6jutReZ9-bbooggodYmR0B_FqcF4eoE6ri_Blapux81YmiEVryP8aHVeM67gdLzYeGGfQMWuo9NZRH3mWgkNZt8UsNoawEB-Wqp7UXJmNNal9d8zV5hL4D5qCYDrICdt8QXBUhrLvI3YSQouvkVCRvBBILcnR4igSG47hMdyIFkuzaFSSR36AAE2CZUE45h-Xx--4TmPZoFpXpnTRTgc?authuser=0&fife=s16383"] }
                 ]
             },
             "caotun": {
                 name: "草屯鎮",
                 points: [
-                    { id: "A-1000803007-00002", name: "同德段96地號", lat: 24.00141, lng: 120.69609, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000803007-00003", name: "同德段98地號", lat: 24.00153, lng: 120.69599, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000803014-00001", name: "新光段1258地號", lat: 23.99063, lng: 120.65689, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000803014-00002", name: "北投段318-2地號", lat: 23.98934, lng: 120.65616, agency: "財政部", unit: "國有財產署中區分署南投辦事處" }
+                    { id: "A-1000803007-00002", name: "同德段96地號", lat: 24.00141, lng: 120.69609, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gxokmx7uhZG1dNBo1oeCo4CcOlI-kASukkaX0kX_aXoU69LSwcVIum5Z8kZ9LrAsfMQPYq_UbrbhsoO72lbEnziHLMb21QKBntq_r5Rp_SivBoqiXYiLYHLVIuapijy8l2o1y848jRHa0WhLO6Igz6ZgtahkFqlx792dmxHzpt3dwk7VY7pIW7lsIJtlPvWGB_5WK4esIbIoZa9qtHoCd360gW1sYWWpGEvcUGXAjLoR9nmjizmRSPWxYQ?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GwWlYaIotPQUd8nq128UyiWsyy0qDUc8utm0D8C13R1RgOoiDx2hWFT4En72J_WfYRNmE0G7OgTwvwx1BQFv9Ja3Ff_1sM4k2mSdPBE2QUBSjSAl33aAfSap1jfMcC1AZZzR7nGfkQ5nJi0lI2RBQbYJhBq5A_am35zPgbycwueoowMgmG-is_Qehnh0vhyUVB0gS_TGH9E8SWPmAPSerrhVbD5WnQcHn6eKbsvMNIGHoTzV1VerhHbNf0?authuser=0&fife=s16383"] },
+                    { id: "A-1000803007-00003", name: "同德段98地號", lat: 24.00153, lng: 120.69599, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gy1a0-biT2Iwy3y53N_fKJPr1wR6TO-MV108RMxxmlOqQiPr1ZPzvkEkCiFzmB8zbDWT1wQCpIx8YmzoaGUjxkQD6lOI1c_jw4-m5ttlouqLy0RE2CzNrKbrn_xP5lcNkMwT0N9q1jvKHHL_iSfqoPrAWAzed5lQJN8wBLneHnuTtV3ypX2c90W2XNTMyXfl9_tKWAFaob4Q-uMbWWR-DdVwRIg3Zmb0qMHgVD9rEvMP8aukotFLo6XX_k?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gx6145z1jUhYsqXSPiJEP-1dNG9iOcPtv5FNclbo48VKxQUgph5LbG7wqai4Hwb9gRBEkXOshj5zEFCx1kJYLn_KFOUd10g9N-aMnUQI5AfDD8iz-acxCK0s-njQRWCw-PLRBNEqPM_TdBDJuupaEDvib2v5h2lR6wl6JeUfxe_3oHecRSYbYplAHpX8jrKr-p4WQZqZOagi0DkplEVvPEP887ee_PmVB0aDsPmMPcuU2a3Fp62RV_XpSo?authuser=0&fife=s16383"] },
+                    { id: "A-1000803014-00001", name: "新光段1258地號", lat: 23.99063, lng: 120.65689, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gyqo4ZY0_TOAB_PxYdmmZBe-Cy04HHEH0NzQDtMdRDIi_nuF8aW_WgFWA2vHAIItXTss4rFipfz4DS9PNTmO3jIkxgjFg6W2Vjldy9Jp4KaNNZ2-mcPO6hnp_UrvXKYpC232Txl4bHoZxS1YVuzsPFhfwfSpiO3TrB2uX9y3-f-s0jCZxCadckXbAknVuTBS5T9ELnISt0qu2GSiUH70b3UW2CEi3bsYenNs5T-ad5auB5kMaw_yk5GqVE?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gy-3QOUhCwyFUgrz35PKnjc6DG1m6_0ZqBuvrCikpTRI5_8m5PCMxdSdqg99w-_kiBvkpLqCxbzMZPnCuidAo14R7GN8guIBzFn2PoHT_cNU7ubjjgjhXwAhg-JEljTLOvEmOMd3ePRAlvZnCZUNiQfW0RbkH4HQJDUl-L_zCE7qP2wKCBNLDy2Mi87ckOBBsTxB2h56htAJQ_UkqUEJNv847eJtJfeAIbdXPxHlr2Ci1VzB_J10YUcIIE?authuser=0&fife=s16383"] },
+                    { id: "A-1000803014-00002", name: "北投段318-2地號", lat: 23.98934, lng: 120.65616, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gzb3tu62Yzyjet2Es41JCPoNctMkfX6fwPRBDPbSKvAMiGVqcBZGlYAC-QoZ6Mra4DwCa2dB29DPm2Hu71RoVV_i66rA65Z8m8z6Gi7ihUQ5b_TPr7y6upqWsxHHK5fuKKjCORsY_WIyz4b3tO8z0di3Ill0X6T0kOhrBOP2iw4M8HP_hTZ3k9kPQuHPDlLmRXMdAKhVN59ldE-mC01LMXYfdQzw8mf0NFREj367EDzwFYUbfyZgbJtkN8?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gy1Vd08Z9eVlxbabXfQHP-3FBfhVw05c2EIxsth2qBhfr3yyPZPFtZbt3kpiQOwCJfs5gWooZj9n6w9zlN-lGgEfBSixugbsYo8e8qcLaKuEvDdZ2IQsL1iCGpr7Pdq_-6wBFKkUpAirTI6d0NhSu3DRIDmHWfzNkRY170tYSIGbbt61xKcFR5m_b5frsUWr65MwaJsJkkcMBnK7tV9HUCrMe7Q38P9eF2yEFJlzK8SCHcGonwbMIf2_bM?authuser=0&fife=s16383"] }
                 ]
             },
             "puli": {
                 name: "埔里鎮",
                 points: [
-                    { id: "A-1000802025-00001", name: "福興里福興路", lat: 24.01465, lng: 120.96398, agency: "經濟部", unit: "台糖公司中彰區處" },
-                    { id: "A-1000802028-00002", name: "榮光段 1135地號", lat: 23.971251, lng: 120.996544, agency: "未提供", unit: "未提供" },
-                    { id: "A-1000802009-00001", name: "籃城段287地號", lat: 23.99074, lng: 120.96006, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000802030-00001", name: "埔里段北門小段47地號", lat: 23.97013, lng: 120.97204, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000802008-00004", name: "忠信段652地號", lat: 23.97064, lng: 120.9524, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000802008-00005", name: "忠信段657地號", lat: 23.97054, lng: 120.95278, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "B-1000802008-00001", name: "大城里大城路10號", lat: 23.97147, lng: 120.95974, agency: "財政部", unit: "南投縣政府稅務局" },
-                    { id: "B-1000802008-00002", name: "大城里公誠路26巷5號", lat: 23.97136, lng: 120.95972, agency: "財政部", unit: "南投縣政府稅務局" }
+                    { id: "A-1000802025-00001", name: "福興里福興路", lat: 24.01465, lng: 120.96398, agency: "經濟部", unit: "台糖公司中彰區處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GypU9KEuU2-MZe32pR11egVBfHC3u7oOJB7pYqzAbKr-UskjUPa3E48pU3WpHh_ZGY0pGLEAdoP1ha4jnUGOe0jRSNK9AI660xWQCX4b0dBrqQJhXwg2HA_Fa63LZjp-nkWqN-s-kjmrrSf1Fu18cd5N58ehhtqpS02zvva3EgZDJjDEKFyTZQhjgNtKqT-XHJqaomeMMVrbh3T1IH_2ml-MDVHegtOTH9l6F4GZZid_YRVQzL2n28E6pk?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gztp3SSw0ruxpvE_w7KDJrtz_rO7cQYY4eeU1phldTZLhBc-j6oXxug01eD0UbZmjAhA0EIY8e_SHHGEmGTTN7amfnwpXF4y_UAblGLY46YcJ0NShKklhd_bKD-vwZutTTp4-yYn0kKPU-h3ocuC_cGVjIHXGyzyBoJH6vZkV-cov8qEZ41KrRdREKsJ747e5fTusSmhdzYCvzsYoDZElafunirSE67qn8DR-8zqTOjp_YWHI-IVp4N2Lo?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GzeAyP19mDJC6q11H9F7oDQ0_zTJ2W3gCGuyqElFjF9aVyKXJesnJVVjJ8uAM-UazN8lJ9yXYpWw8wdrk9DWjKsXchirrGBI07XWFGNcAlbDmXic8zVeSlW3h_p5h2BJXYZVRqgat2pRo5mBeDv_sR5FBmzoTT-0tznqqzOuQ4ZStZSJh16KbSAh6Y3ELlMpHTBc0czbPWe1v3EIeZQtApKL5-ep6jIgjU4Syqzo5khu0iI3UNqNhjBTv8?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GwnBkqNZEIpd00gU7eoeQb7qzUp6hCAe4AZyxzEAb_oZhecEhepMjebS0W33wjwu_RJ8X8NrGlF8UR6hYoVCsLPU7fvxY4K1EvaDStWXQL4VTsCnPod-6radLx7FHDM1yAIbOjoasbLz2QCSww_58IVy6PORWrGpnU_E6KAmiZUT7N5ykvHxk5noxwmAxhfymvKEoO9D6iBqQT1fcB08-dFVk3sTM92kRJOvq3jk5pTuyS8sC9zt9WwLHs?authuser=0&fife=s16383"] },
+                    { id: "A-1000802028-00002", name: "榮光段 1135地號", lat: 23.971251, lng: 120.996544, agency: "未提供", unit: "未提供", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GxSXyvLb0dHkZtzP-zrPJQoANSPqmK59E3TlgPbuJ-cEBz9fjRG0zioRrwkKzjIknK7cDdHM96_TEl8ob0eTGQgHxErCnZmz-bYbkmkO4Rf8VIjhIIS9w1cXxtnEDarfaOY9eWTQSlrLfX6bKf7QSFMyMVq2wZZL3g4FEKW34fKBmmyQv1SI6vJQQjugn86j68SoRvOcqfEcLG0uc0G76T9e_Vde6n1urto2jp62DPK9B6wetgAWexXllU?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GyDNWIMGkEwfoHiQG7WM-2YkMJhhHC0c9dbpkowkZX8vJ3CE-y-C20AWKOsrA4q-mT92L4f6HvjECIy5qumhXTISKu53iXH8wvnmd-ezbWgDpMKnXUozpque8EouxHmu7iBnRGaiK3O0nue_JnuFnCU3WgktyTSiUBfvkskNgsTb7X3caEX1wIi-bOOpkv_pS__BspW3OM1PqtvG7onR90AWx76rhlUnE40VUfRdnRQC7mdvOOqcIqJcjo?authuser=0&fife=s16383"] },
+                    { id: "A-1000802009-00001", name: "籃城段287地號", lat: 23.99074, lng: 120.96006, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gy19UFczEXCqWIMx62LrKGh6lEKOX0ijyzpNPvaibutgR8rYZncN9iJYJDJ0-NRv1jpYA0f5vy5NeBG3McmGwpz8KwiwF0yyYnA1x2O2Xx7Rv_RPY5T2ikqAEdhl9HJD6opCf27nYYnYBVngz-ANkiHiYHAtdRLkVpMGLNNG3xKB3lpGzTiCMFzYIiTk7VKQT8GiwPaDBtg9u5noRAzO4YSBOaU5CV76hKactGL7_2p-cuSdlSifPEFsKw?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GwFqut5n2rKJ_GB81Avzq9wqk69aqxPmTtQWNEnibxlGFYCBeXnrKAGcY719DZwO6V03zlKmJnvTt4DH7I9pZNUe_sfbhcPwDSEoUY7qm6redD0ux8bDe9Pq_FgmM0e1RIEjBt9ln7xF5EI_Yo7tMMGuRmj04x5EOotZJTW4qBIgsmTM_ma6l_q9ETU17RJE9EtVFXlHq8gnQr8RS3RB1-IpIp0M0VzIdsD52aegYbm57yJ_IZdnrhhOEw?authuser=0&fife=s16383"] },
+                    { id: "A-1000802030-00001", name: "埔里段北門小段47地號", lat: 23.97013, lng: 120.97204, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gw8Q5ZfKTvCXAI94DSQJ_5FYg6wFMqX7BiUSUq8AQM5-vnwfkUxHqdcRBjlV7LMtlbkiShlGwv0d2Twb3X4ZyBj-9LLbAG7ax5-fT7hDEVz2vw4U7NVY3HnpvCssR3dgcNYUK1mlR9pxTp7mDfKT17SBZG6umV5_h4VLYNlkjZn3IZwPqYL7duKwmRQ6dXp1bz3CqpAig1tsaSVuREj0D3J1PGGT3w2srcRcBokg6RIhPejepRvqIhM5qY?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GxX0FCJdt3dpwyieJcx51DLEi1cXyt1a23AkH_E-tZB04uRTv3yPMt1Q4ZOzq9dtOFgC71VhZDPC2HhQdCFAUiBGMx5AWrCPkUdmrHh2JPy_PRHK_iIZKqCIzmzO7QobfeIWBifBN0LDCgMA1Pb1XctruHCUtNBZ8ZmjbEP-GKTG4u9XkUgCgce2sCas08fKS8hqIhgARJAPF8SJgaTaRlLc0-zTv05ADhcSwy0RMk8viKZFfhpM1gB9yQ?authuser=0&fife=s16383"] },
+                    { id: "A-1000802008-00004", name: "忠信段652地號", lat: 23.97064, lng: 120.9524, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gzq2fP5R5nxqMOJeHkVlU5XeV51R0oB6Tj9oQDQw9_oN9WmbRQXsq21iiKgVPxMhOqZwkImPuC_4mdgzEVlr4IjqU0KGwsB5ju1rx5HWyk0OAEl1dj0M7OCS6Sqgj6occIECgbGu3pLK0NdxXq8R4vvCwIZty7d3PbsNpQK3QlvedKS9CNFuIAiSyKw1LIEftmUBZg7rySelVfhogECTTMAffLjEJLXikDJAB9jJL29_QrA5s78FTr_ItQ?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GyCNll1UXp5JjDVNyluhm1PLx9QuJKriHQwJyIzaygWq3N30bmtnXaDmqnqCrrUiPB_0g4r6zHoKNsAQHqdMV-m2NsgFhV9zJ79RwWlvJ1bKxBT25tpLyxI-EOZLh5nZHZVVHykdnm4LjzwTtNPZYjBP0Ehq56bdBXy8iNhdugf9Ia2XGD_1GAc2Q88EagNHKFFouKfCSSVe3DkXPJe3br-23fYT-P_IghO5IBlpoVpfLKL8XSek2vKvpQ?authuser=0&fife=s16383"] },
+                    { id: "A-1000802008-00005", name: "忠信段657地號", lat: 23.97054, lng: 120.95278, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GwzX41IqIw4LrLSBQu-Ozm7PFGvRLdyTI9JyrvTcjh2OI0nE0xDhkUKCyrNfL6fcZqNX309mz9DrS9WTWbj4FgxFt8VWlgrMBmPEYn_CcrAnfhDie3SXP-HcNnEDcE95b_qZnvclvo6U_AnAnF4wPGkZJbCKodO5zwcffGOFyfXwxKeN-2DC6WIwZUgtNLYFEnE91vTOtRz-0lcYXjxhpjfJhFQPTHomKVPu9v6m53ZDryVkLwDbrAzdtw?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gy3MYmx1Cd8bL6YIsIDjsP-N4_GyKD4kRs8pXKpesUwO-DKnOtpIfNotqHYcSPu67ezB09rpGhDrrWSnUijIhmmFBHRLbbXFrOyfBw7aBd_6e7ZfrVdEB03TYewtFuygIZswXQYZlsmX_jvgQwVqgbHVVNs0HiZWWdeA0RQ7iwxyI31KhCgOVz8g28cYx8Gi4lThI0lBGUpWNtLLYSrQLgmyI2pUdCgNkPwGhh4wcYJBwqBOyTnBocfWtQ?authuser=0&fife=s16383"] },
+                    { id: "B-1000802008-00001", name: "大城里大城路10號", lat: 23.97147, lng: 120.95974, agency: "財政部", unit: "南投縣政府稅務局", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GyZSFxq9JSvFFj_fd-dRUjQnah8QKRJcKUmqjLWZclLy6FoHOFSozWKxkBYTAi6cMmn8mXQWxc6ZZsvzbwSf10Hl8yNmXf3o7hNvlciYRoFVeY2qqQ7jKjkBeBIbVV_URYdNkz-f8QO5KWEL1easvp0kFL7Anffq_FKa695ESTqhF_7QEItCbhuGqDWVOOCTGTabQGTr72RIDO0MHqdVwypmWH4WRGqSQeFcEWqoEJ4acHJCbI0f2uMFis?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GwRU5DZyHX7yTQjHtTyeYz5VSxHvwQYBlrfFSBVMekT7q1k18GLyPv1J0-BO1m8sQo2dVAZKV3Yf70tjqCoVOkPWTHmn9RGE2psONS3-j0-jIQ40ZTmv_lWKow1LLOiL-pJEx672wAPzqNvnTFZE3lm0Kww63HFw4iG633dCdBerR8r7rxPQZ6gjv52u3nkuPYr0Ak3CN1NDCM9Hh9HR6Meepz3ohj0LomNtFKLhZ4SzzOVDvQj3FNhFWk?authuser=0&fife=s16383"] },
+                    { id: "B-1000802008-00002", name: "大城里公誠路26巷5號", lat: 23.97136, lng: 120.95972, agency: "財政部", unit: "南投縣政府稅務局", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gx-Qc9DUhxfs8WIuAundDvPi_fAat8Myqeukm2danQHrlYB1GL-Xwn_20CHaThzchW7E1xvMi1hL0FyA4EK04McYlLmLdbFmRitfZUXwv531BcG482zvWkEkmzC9uXMXH5RkHJuFO9D_4wEcDpZ_ngg4ghvex8tAcxmy0by55s7miYAga9mQh86NtWSZnmkSk0Dn6Ydwvcxs8niV1gIlm_yG0B6bK_pBDIjZTm8QYUA2DeacUGJiYdZv90?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gzzfa_tI-uFrkJT4siKpKisVk61LESs7gurxzsqxu5hJZouXhNMarhK6yX4txWnY-AfWgIO8RVNHXKSGAnanYms9JMosFhPBtfFABKzRXT1Schipf4jwKoy6aSzAGB8pABwxrNYxBgHwRvCe9c6TmnE1q222ibFDfmxwqlmShaIuDFR1xVmKZ6jSNfly3frOOxWmctc_CuPALsgDlMdodT0-YN-VUGBlqe8qVK24mx3ymzleiJy-GGiBD8?authuser=0&fife=s16383"] }
                 ]
             },
             "zhushan": {
                 name: "竹山鎮",
                 points: [
-                    { id: "B-1000804001-00003", name: "大禮路6巷5號", lat: 23.75783, lng: 120.68209, agency: "財政部", unit: "南投縣政府稅務局" },
-                    { id: "B-1000804001-00002", name: "大禮路18巷12號", lat: 23.75782, lng: 120.682, agency: "財政部", unit: "南投縣政府稅務局" },
-                    { id: "B-1000804001-00001", name: "前山路橫巷4之2號", lat: 23.75798, lng: 120.68194, agency: "財政部", unit: "南投縣政府稅務局" },
-                    { id: "A-1000804012-00001", name: "溪尾段28-7地號", lat: 23.79012, lng: 120.7084, agency: "財政部", unit: "國有財產署中區分署南投辦事處" }
+                    { id: "B-1000804001-00003", name: "大禮路6巷5號", lat: 23.75783, lng: 120.68209, agency: "財政部", unit: "南投縣政府稅務局", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GyY4EtXzt1GgKfX7tdud7KczEd5D38CvtB7Jn9aZ9w-TtEoQD-kgKRse_xs7s4hgMCYI6GGkGMh-GDGP_4WyCfFBMTeVxFSfn0JVezFhWK4RNbkW8KcTkDx1Ao0ZYZu8hhPg_4IPm4mdZMf3bdMVJl87RWR7HrQN7JqyVki7pZkteWD0yUrZK0ys7dSZ1R3HUsgBgtvZ_OEJKhpu_1HAPR-wapkm56gQIZxfDK1kYgP_P2x2lHNTLmkd4I?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GwP9m602gcwRJ6ynfosZ6wcupJcg6_f0TRDq8iC2uZfWLNHn8XxNpUzmwzzDgflDJS8ViOg5kPMQ3rIi52FfdTvi9truWFt-T24yZx5bJB_uAcz8RLnj9bdLQJiuwNHOXLbJXIcKVzqwWAmVDAClkX7PSJBT6nHvASDhjAfxQCgT22f61q9wC3baXNUWsc-VF97cic-wxu8rkHYQttCk69kxRIfZqEcSPjj2LxMcstd0IotnYG-cwPLRCc?authuser=0&fife=s16383"] },
+                    { id: "B-1000804001-00002", name: "大禮路18巷12號", lat: 23.75782, lng: 120.682, agency: "財政部", unit: "南投縣政府稅務局", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GziPhOIohf1vXe7QqV4j9dKx41-yHrdoWiAVohWLj1hmpFk2nu2WPWbmL4QM4Sb4UBGlP_p0QSX5BCry4BLfxlZ16C0Z4IJ4q1wXnrCY_Gp2Y3xmsmKm6DvoZEdAzuPdq2aIYXJLt9IqEoCH9X6P9vPqNYqv4dzkn3FcRoGFlnIzNIKKsOE6dKzIcWMj383SKxS6FnfrlLjlQm5ED35viAp6zJ5uP3Tg4X9_dTmYGexW8cnaxN41RFxF2E?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gx3kW9UFsBbna3yfzatlAv53oOh8ivjQKnWMQV4pRNkOvaDJRolPHofENJ3y_ZxOPGkrMpMtAq5SzcyTqhK_CQr1kmAj-x3H2NASlt28mgqCkkYYEtGkVD1jG8lPcb-IPxjU1IXysW-EY6yADTJvKqYehxVGcrGrmKqajeKo9DT3vhsl52IBjDPd92tpnP3GX1Qn_rFs329SnxOYgv4ljUzQbZaQWPliw4SaaN26baTJi6Yc6RopJ8-6Bg?authuser=0&fife=s16383"] },
+                    { id: "B-1000804001-00001", name: "前山路橫巷4之2號", lat: 23.75798, lng: 120.68194, agency: "財政部", unit: "南投縣政府稅務局", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gz06dDmPW50oPiZX1S5mknGXmTwtvECd0NMyo5fz9klSprvTrTj6l24u_43d-bvOdCa47ju5GqWp974NViHfUrkAE4lDyPXfiKOj1fezBLjaxjbfG9bJlnKNY950yn-9Vd9bVVBn16FA72R6B01vhVinSfQY3lKds-QCBJvWzwv5PuBTNLeJyQjdlnNT4Bfww8moOcWs0eSABxPMjCdumxK4iqhjHsYcuh0zp3SCU4L9oJXBGZi1v_pk8A?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GwiEdeLkF1VcXhTRq1WI_TrqGmAHOsmvWOU4Aa9URdDPtgEjNK4UwJS-1zKUpccLG_gGNuDk3EjO8LgW4JHacw-9wxuq9__XtOAl-J9SlyoTWj8U2j1qFMZet6WzSWQdRjMv1ML-CbYlJrlbt-_A36llNS6DFFIXE80xageoYKAJal2GpvNKgokYn3h4s7lISevw1E_oalzDIj_k8sksNGKXF4OG4-b1iA0PMofZqwqAI-aE0fSpEWxTtU?authuser=0&fife=s16383"] },
+                    { id: "A-1000804012-00001", name: "溪尾段28-7地號", lat: 23.79012, lng: 120.7084, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GzlvHAf8utLvM_6n_ZBPbEeWzgorJHzHSjfWOLtoACGOhxOiNJxuzBJXZViOd5s7jv1H3JE14yPfuXtDYSwtpteWVq2G9grV86lmiKmppqZShHi3oXKMGqgYgChms-esdH49yk7x-tXX6ErBekaYzjqQdcV6Q7nHW3gCAToB6KVfVxI1pA6CHg3a5hENbq2ITWVT69d6-0veZIydc4tETVDNpBCafYtzPniWUjHBSWyMhwwDhCydQhnMyM?authuser=0&fife=s16383"] }
                 ]
             },
             "mingjian": {
                 name: "名間鄉",
                 points: [
-                    { id: "A-1000806011-00002", name: "北大庄段166地號土地", lat: 23.8836925, lng: 120.6536791, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000806016-00003", name: "新弓鞋段81地號", lat: 23.85268, lng: 120.63495, agency: "財政部", unit: "財政部國有財產署南投辦事處" },
-                    { id: "A-1000806010-00003", name: "南田子段 339地號", lat: 23.8610205, lng: 120.6676657, agency: "財政部", unit: "國有財產署中區分署南投辦事處" }
+                    { id: "A-1000806011-00002", name: "北大庄段166地號土地", lat: 23.8836925, lng: 120.6536791, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GyV7pI8QrHKbhASBzOzfl_1oSqyWIh8ouO8fy_DeMS-7326Vk2xJvytqnaqCCO2I-rsZSVhXXWRawHgH4Qi03Of1rflP8FOTU_7mv2kgi3v7ZD9otj8li1YIvrQmmEK7gAdVxTewV0YbVrD4Ciq4Wa5gGldqEfEMIt5DoOgzLF9-e64rPnYbgtjXOqARTQRqoAgXcaGJ1GweDsqbt1IoU3j8K_t8tmi4B62EVJAr5Sv8lYjKEsLn1Dq5j4?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GwFtzKsPV-ByEBnuYyrt54nzvq2A_4j2E1YBUSmP6f8kXOuL1dIMhCR6B3lxgjBlnCMV9EEdPRHn9qB7F-cWme1zq7s9A7i9zK5uVL6TlHWc6eXcobbIcXFRUZy_72lx6R_aDEgiyJTbfeYQ4gAksIhaA6D-mLuw1VdbRHvn3FbBDW0WjFkcmND3JtW4WZ4bvSdBWFgP5J4O3_irYljg7rCizBaf7rc9vllqkAg2lxC8cpAeS5p3K5f4ck?authuser=0&fife=s16383"] },
+                    { id: "A-1000806016-00003", name: "新弓鞋段81地號", lat: 23.85268, lng: 120.63495, agency: "財政部", unit: "財政部國有財產署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gzd9n6P5G8bipLPssroIo4MqMgPqqZAY8btSuBMtAPmOAUEFL6i1HxStQU-rij1haoM-8g5Uv_Eq_zy5wBw4aWxYOdqsoEUh58FdWDQRPoFSOkjp2L11fSGzIlNSGCnVj_kmGgH-5P28tjX027IvvAOQD9RtjkedNtvuU4BImZ9v6iUFZtiI-410odhoKi_iuCl-syzQ3swg_ZvtIZsekE5KoJTjoEE4mssUwlssrXePM-5vn2-k8BlcOc?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GwfPZNH8ODtQ92SsxrLUKpoHnH2sb42yobq5s8kBhFRydAjx6iZVKKwypDVDUKHMA5pz1f709J2PN39Mx23ftARQ446FPXmNLRsY5wRJQHL3xNzM2re5HRj0-YBrkoygJ7RCGaaiYDS2mCeWOmaQAdIU0vH3SzoQv0yHQYLNgGxBOaMvS62rJTON2r4BQ9gbIBDdIQpWu1vZ1E1GGhmGLTQM8bBvwk1VRQ7F6T9QF8ThNoHHiKIwYk1WB0?authuser=0&fife=s16383"] },
+                    { id: "A-1000806010-00003", name: "南田子段 339地號", lat: 23.8610205, lng: 120.6676657, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gx9LAKWDwhdLuxPswVuG2q5HfNjbt3zZwHBRrbyaDxkEgzNJ6zutetNAMwBXNa0tsOeCY-dtezZiz6wq05ibtWQRIFLPLQipeR69c9-60WzzSGiSj-g8Oc_ccm2T0z1jcxP0trz6acqgvnAwBsGgGKouvKWhMs3Gub-1sBdlzxnb72C64VQ1gxRMi7N292xeKtxxedB_wBJSqJm2VjsOo1V7Z1ba3JEhSlAnY-87txN6yXMMBrVI_HvcRc?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gx06TgdZV0vbV5wFsS6Jq-ESvSInEuSA1_6r4Rw4l7bQk-7q3qAkXHg6oVYSafrkzuiVJEevXjAql7D4YIJjkXMKPuddOKfvqQ9x0EtGOozZz-Y89nJo1LbD3e7o52A5VxbVeYYAXAZW_D2wRXoxEbXM0cg0SoqMroBGJgbM1oeqEZUlisKM0d8xMgRP_HtBe4bHshMwIxmqqnNT-dwYfPE1lwnHOtBMzg7ht_XPkI_53_eTD_iNfMK_yQ?authuser=0&fife=s16383"] }
                 ]
             },
             "jiji": {
                 name: "集集鎮",
                 points: [
-                    { id: "B-1000805006-00001", name: "臺灣菸酒股份有限公司臺中營業處集集營業站", lat: 23.82833, lng: 120.79077, agency: "財政部", unit: "臺灣菸酒股份有限公司臺中營業處" }
+                    { id: "B-1000805006-00001", name: "臺灣菸酒股份有限公司臺中營業處集集營業站", lat: 23.82833, lng: 120.79077, agency: "財政部", unit: "臺灣菸酒股份有限公司臺中營業處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GzKw-T8pv2j7oFeR0zXLONnd8cU2hsSpTQSBkHClw9B_waVXZtvlVXtjAzR_ntwVMZ3iIoknuqUOalsOmVi4LgOZEcbyj5REGiHIAjvZvk_70V6r0qDtmWZFpNJKDv6I8CgVVevWpsLVgZ00cLFM4ixS66T6U1k6BbHAzOfJ8AXYQQLQBk-Mn4E_bSt8uiJ6cVb4LkLOvSoanegfjC56cvLr9TbR6OLSaSBC4cjcnrKO6HD7X5peg2qHdM?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GwBMUJ61NN61inm5lKr_LcowG5MM65TwaGmy8BkRShkRVpODFWIPr1jNmqSk-2-7uis4HdarOifC7PTA156lOhxpTkZ17c5vhJFjINghZBbDa72YAVkTdBl9Txm0nswTaAR_2DtxRNgU5kA7kVb3HMtjTSqKZpsCOTILgcsR2QIXr8J727R6shri56rBC0SigAAPKC0I3_dqHQxXF_QY_Nagz6uwqYCTMKFoyDp9waIvz4XTpEVnhoqClM?authuser=0&fife=s16383"] }
                 ]
             },
             "shuili": {
                 name: "水里鄉",
                 points: [
-                    { id: "A-1000811006-00001", name: "鉅工段992地號", lat: 23.81363, lng: 120.85418, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
-                    { id: "A-1000811005-00002", name: "水里段0161-0000地號-空地", lat: 23.81822, lng: 120.85408, agency: "交通部", unit: "中華郵政股份有限公司南投郵局" }
+                    { id: "A-1000811006-00001", name: "鉅工段992地號", lat: 23.81363, lng: 120.85418, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gyu3VU9zOixNh1rHQM8IJeRkjm8cTaZ98suF5i1VPbVKfhm4xY9gVRzhQG4hQdiem49-wW0AYYy53yL5OKs056r-mRi40keCMTw6aUpgaaxNl0p8GSuvfypmREevdpD4AEqihIDHwEjrfm5z29oytzPDIbs8r_LPuspFMp3rNMW2y9AUG227xlMGwJBsbGkZlPJC4phMnGVdl2CZ92pP-xOrnaK8Vr7MAbj9Cji-GyruOMin0nfxUiozgQ?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GzWV6u9NVztgD847V4z75VXctFbqosoIrCxp6mNFo6Ycn4v6kUSPqXudyJ0hmwcjPu9wIb5VySoF8GkGeBwhXgb1m3s-bS87gm1JHsO9zXwPMieX1z7cBPuDtbPgWPc8Gee9gW6AesSXnEzuI9C_yWOnhyu3zGSrou7EPzszr5f3QTn0Cusy4bnHyxT27Ir0xXhoQ389sWScM9xUUw6xSRFt2kgVDbnF2R2czRIWL-NzYXMvsTVZBlpg2A?authuser=0&fife=s16383"] },
+                    { id: "A-1000811005-00002", name: "水里段0161-0000地號-空地", lat: 23.81822, lng: 120.85408, agency: "交通部", unit: "中華郵政股份有限公司南投郵局", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GxF76eS8PfoLy-i9n-PUkdY3UgDvxIBt5xgbhfvup_6FwQ-4G63FzezVt43XDo25PVyr7RrkXUgE90JmNWy6HZKLm4m4TrHGbgna-y4nllRCNoScdqo7MIfV_78eJyy6vK_OC5m3cgjp-FkxuQAuJkFevGs0r6axHvLhf16xBpzgzoOFnWuBS1STcZRI3WHYDrBHNF2AcHk9BCeVhVqYinT462ngOuUBxdBSCnjJQ4qwSoQXuafdNZc2rU?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GzDhQxC8KQPBA0BzbRqjDC4jttihy-KPr7L5GNkx1EX8zD12KQ5E18n_8nBz8XZvEMzuhQcrL-fP9a6PW49EvXce5ES6fH0waqXTjJkf_FR2v6E611uOMZmX_IgWriEhaSfbVmiLVahEzjWuDDwbA8XThjC77ePYseCt1ifqsSeW1YjxrGKxoHW6HGL7IyL0wsbqoiT8_OLv9PCo33hr5cIr5tag789dbeubjTBhbrMiNQxC-VkV6z0Aik?authuser=0&fife=s16383"] }
                 ]
             },
             "yuchi": {
                 name: "魚池鄉",
                 points: [
-                    { id: "A-1000809010-00005", name: "明潭段136地號", lat: 23.86797, lng: 120.90906, agency: "財政部", unit: "國有財產署中區分署南投辦事處" }
+                    { id: "A-1000809010-00005", name: "明潭段136地號", lat: 23.86797, lng: 120.90906, agency: "財政部", unit: "國有財產署中區分署南投辦事處", images: ["https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GxCxQ1NRhtw7fLUhvrE6c14kMHQN_IFaMUwMtQw3zmt5PMfrfnMAGIIazG5nJHpt8c_hJx-tTcovZwrj48i_urOCSKnze5C4lDBTGV0UYmN8aEGyf0FXOc0Zc1xTS_J40blPelyTfh8wZyQcRgBuAmVHu4Fw5Scv1kKLKhrpzWTuvcwOTRx2uU5RYbgAUMEmjLYmrMrm9MUvrzPGKZYgWD24oq-j2EOwRbMQ4FEzP56WvHgaWSwPgWIyUA?authuser=0&fife=s16383", "https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_GyPwJSOgCVNMAXpEAy0CdbtmpPhJPGbIdC0kS1CL0GhqykescO3tKc5rofnr_RSo7LqcajYvxqjxl-dcPe19oGCGNANI7PdRdB_41HjSWT_CDVl-VA6i1NC-S7Y6Hb4utBFH927LWqhtMGeO4ev_0pb04lEbeHEqpSRni-HYCGPjG2QPj4A_U40TYvtGD9e5ezzRNmE8-7_iZ1QL0QTGuKbYXdJF9a6N2G4PHUap5zoX4USXuZQ4wDCbu8?authuser=0&fife=s16383"] }
                 ]
             }
         };
 
-        // --- 狀態保存 (空地空屋專用，完全避開舊版的清潔考核資料) ---
+        // --- 狀態保存 ---
         let inspectionState = JSON.parse(localStorage.getItem('nantou_vacant_inspection')) || {};
         let inspectionPhotos = JSON.parse(localStorage.getItem('nantou_vacant_photos_v1')) || {}; 
         
         let currentTownshipId = null;
         let currentItemId = null; 
 
-        // 向 Google 雲端讀取進度
         async function fetchSyncState() {
             try {
                 const res = await fetch(GOOGLE_APP_SCRIPT_URL, {
@@ -311,39 +338,25 @@
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({ action: 'get_status' })
                 });
-
                 if (!res.ok) throw new Error("HTTP 狀態碼異常：" + res.status);
-
                 const responseText = await res.text();
-                let result;
-                try {
-                    result = JSON.parse(responseText);
-                } catch(parseError) {
-                    console.error("雲端回傳的不是 JSON 格式:", responseText);
-                    return false;
-                }
+                let result = JSON.parse(responseText);
 
                 if (result.status === 'success' && result.data) {
                     inspectionState = result.data;
                     localStorage.setItem('nantou_vacant_inspection', JSON.stringify(inspectionState));
                     return true;
-                } else {
-                    return false;
                 }
-            } catch(e) {
                 return false;
-            }
+            } catch(e) { return false; }
         }
 
         function saveState() {
             localStorage.setItem('nantou_vacant_inspection', JSON.stringify(inspectionState));
-            try { localStorage.setItem('nantou_vacant_photos_v1', JSON.stringify(inspectionPhotos)); } catch(e) { alert("手機暫存空間已滿！請先清除已上傳的照片。"); }
+            try { localStorage.setItem('nantou_vacant_photos_v1', JSON.stringify(inspectionPhotos)); } catch(e) {}
             updateProgressBar();
-            if(!isListView) {
-                loadTownship(currentTownshipId, true);
-            } else {
-                renderListView(); 
-            }
+            if(!isListView) loadTownship(currentTownshipId, true);
+            else renderListView(); 
         }
 
         // --- 地圖核心 ---
@@ -382,21 +395,12 @@
                 const bs = document.getElementById('bottom-sheet');
                 if(bs && !bs.classList.contains('hidden-sheet')) hideBottomSheet();
             });
-
-            map.on('zoomend', function() { 
-                const mapEl = document.getElementById('map');
-                if (mapEl) {
-                    if(map.getZoom() < 12) mapEl.classList.add('hide-tooltips');
-                    else mapEl.classList.remove('hide-tooltips');
-                }
-            });
         }
 
-        // 🌟 繪圖共用引擎 (依據點位資料繪製)
         function drawMapForTownship(tId) {
             const bounds = [];
             const data = mapData[tId];
-            if(!data) return bounds;
+            if(!data || !data.points) return bounds;
 
             data.points.forEach(poi => {
                 const isDone = inspectionState[poi.id];
@@ -412,7 +416,7 @@
                             <div class="text-sm flex items-center gap-2 mt-1"><span class="bg-slate-700 text-white px-2 py-0.5 rounded text-xs font-bold w-[70px] text-center">巡查單位</span> <span class="text-slate-200">${poi.unit}</span></div>
                         </div>
                     `;
-                    showBottomSheet(poi.name, descHTML, poi.lat, poi.lng, poi.id, data.name);
+                    showBottomSheet(poi.name, descHTML, poi.lat, poi.lng, poi.id, tId);
                 });
                 
                 const colorClass = isDone ? 'text-slate-400' : 'text-amber-400';
@@ -424,25 +428,16 @@
             return bounds;
         }
 
-        // 🌟 載入單一鄉鎮
         function loadTownship(tId, keepHighlight = false) {
             currentTownshipId = tId;
             const data = mapData[tId];
             if (!data) return;
 
-            const headerTitle = document.getElementById('header-title');
-            if(headerTitle) headerTitle.innerText = `${data.name} 查報視角`;
+            document.getElementById('header-title').innerText = `${data.name} 查報視角`;
 
-            const listTitle = document.getElementById('list-main-title');
-            if(listTitle) listTitle.innerHTML = `<i class="ph-fill ph-map-pin"></i> ${data.name} 巡檢清單`;
-
-            // 鄉鎮按鈕亮起
             document.querySelectorAll('.township-pill').forEach(btn => {
-                if(btn.dataset.id === tId) {
-                    btn.className = 'township-pill shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow-lg bg-orange-600/90 border border-orange-400 text-white cursor-pointer shadow-[0_0_10px_rgba(249,115,22,0.4)]';
-                } else {
-                    btn.className = 'township-pill shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow border bg-slate-800/60 border-slate-700 text-slate-400 cursor-pointer hover:bg-slate-700';
-                }
+                if(btn.dataset.id === tId) btn.className = 'township-pill shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow-lg bg-orange-600/90 border border-orange-400 text-white cursor-pointer';
+                else btn.className = 'township-pill shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow border bg-slate-800/60 border-slate-700 text-slate-400 cursor-pointer hover:bg-slate-700';
             });
 
             activeLayers.forEach(layer => map.removeLayer(layer)); activeLayers = [];
@@ -457,25 +452,19 @@
             }
         }
 
-        // 🌟 進度儀表板
         function updateProgressBar() {
             if (!currentTownshipId) return;
             const data = mapData[currentTownshipId];
-            if(!data) return;
+            if(!data || !data.points) return;
             
             const total = data.points.length;
             let comp = 0;
             data.points.forEach(poi => { if(inspectionState[poi.id]) comp++; });
             
             const pct = total === 0 ? 0 : Math.round((comp / total) * 100);
-            const progressText = document.getElementById('progress-text');
-            if(progressText) progressText.innerText = `📍 ${data.name} 達成率：${comp} / ${total} 點位`;
-            
-            const progressPercent = document.getElementById('progress-percent');
-            if(progressPercent) progressPercent.innerText = `${pct}%`;
-            
-            const progressBar = document.getElementById('progress-bar');
-            if(progressBar) progressBar.style.width = `${pct}%`;
+            document.getElementById('progress-text').innerText = `📍 ${data.name} 達成率：${comp} / ${total} 點位`;
+            document.getElementById('progress-percent').innerText = `${pct}%`;
+            document.getElementById('progress-bar').style.width = `${pct}%`;
         }
 
         async function toggleItemStatus() {
@@ -488,40 +477,26 @@
             if(markText) markText.innerHTML = '<i class="ph ph-spinner animate-spin"></i> 同步中...';
 
             try {
-                if(GOOGLE_APP_SCRIPT_URL.includes("請在此貼上")) throw new Error("尚未設定新的 GAS 網址，請回 index.html 第 173 行修改");
-
+                if(GOOGLE_APP_SCRIPT_URL.includes("請在此貼上")) throw new Error("尚未設定新的 GAS 網址");
                 const response = await fetch(GOOGLE_APP_SCRIPT_URL, {
                     method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({ action: 'set_status', itemId: currentItemId, isDone: newState })
                 });
-                
-                if (!response.ok) throw new Error("HTTP 狀態碼異常：" + response.status);
-                const responseText = await response.text();
-                let result;
-                try { result = JSON.parse(responseText); } catch(e) { throw new Error("雲端回傳非預期格式，可能被 Google 權限阻擋。"); }
+                const result = await response.json();
 
                 if (result.status === 'success') {
                     inspectionState[currentItemId] = newState;
                     saveState(); 
                     if (newState) {
-                        if(btn) btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-emerald-500/20 border-emerald-500 text-emerald-400 cursor-pointer";
-                        if(markText) markText.innerText = "已查報";
+                        btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-emerald-500/20 border-emerald-500 text-emerald-400 cursor-pointer mt-1";
+                        markText.innerText = "已查報";
                     } else {
-                        if(btn) btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-slate-800 border-slate-600 text-slate-300 cursor-pointer";
-                        if(markText) markText.innerText = "未巡檢";
+                        btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-slate-800 border-slate-600 text-slate-300 cursor-pointer mt-1";
+                        markText.innerText = "未巡檢";
                     }
-                } else { throw new Error(result.message); }
-            } catch(e) {
-                alert("⚠️ 雲端同步失敗！請確認網路及 GAS 權限。\n詳細：" + e.message);
-                const isDone = inspectionState[currentItemId];
-                if (isDone) {
-                    if(btn) btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-emerald-500/20 border-emerald-500 text-emerald-400 cursor-pointer";
-                    if(markText) markText.innerText = "已查報";
-                } else {
-                    if(btn) btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-slate-800 border-slate-600 text-slate-300 cursor-pointer";
-                    if(markText) markText.innerText = "未巡檢";
                 }
-            } finally { if(btn) btn.disabled = false; }
+            } catch(e) { alert("⚠️ 雲端同步失敗！"); } 
+            finally { if(btn) btn.disabled = false; }
         }
 
         function handlePhotoUpload(event) {
@@ -558,7 +533,6 @@
             const grid = document.getElementById('photo-preview-grid');
             if(!grid) return;
             
-            // 自動清除舊版殘留的「已上傳空殼紀錄」
             if (inspectionPhotos[currentItemId]) {
                 inspectionPhotos[currentItemId] = inspectionPhotos[currentItemId].filter(p => !p.uploaded);
                 if (inspectionPhotos[currentItemId].length === 0) delete inspectionPhotos[currentItemId];
@@ -568,19 +542,16 @@
             grid.innerHTML = ''; let hasPending = false;
 
             photos.forEach((photo) => {
-                if(!photo.uploaded) hasPending = true;
-                const imgContent = photo.data ? `<img src="${photo.data}" class="w-full h-full object-cover">` : `<i class="ph-fill ph-image text-4xl text-slate-600"></i>`;
+                hasPending = true;
+                const imgContent = `<img src="${photo.data}" class="w-full h-full object-cover">`;
                 grid.innerHTML += `
                     <div class="relative w-full aspect-square rounded-lg border border-slate-600 overflow-hidden group bg-slate-800 flex items-center justify-center">
                         ${imgContent}
-                        ${photo.uploaded 
-                            ? `<div class="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-1"><i class="ph-fill ph-check-circle text-emerald-400 text-3xl drop-shadow-md"></i><span class="text-[10px] font-bold text-emerald-400">已存雲端</span></div>` 
-                            : `<button onclick="deletePhoto('${photo.id}')" class="absolute top-1 right-1 bg-red-500/80 text-white w-6 h-6 rounded-full flex items-center justify-center backdrop-blur cursor-pointer"><i class="ph-bold ph-x text-xs"></i></button>`
-                        }
+                        <button onclick="deletePhoto('${photo.id}')" class="absolute top-1 right-1 bg-red-500/80 text-white w-6 h-6 rounded-full flex items-center justify-center backdrop-blur cursor-pointer"><i class="ph-bold ph-x text-xs"></i></button>
                     </div>
                 `;
             });
-            if(hasPending) grid.innerHTML += `<div class="col-span-3 text-center text-amber-400 text-sm py-1 mt-1 font-bold animate-pulse"><i class="ph-fill ph-check-circle"></i> 照片已暫存，請點擊下方按鈕同步至雲端</div>`;
+            if(hasPending) grid.innerHTML += `<div class="col-span-3 text-center text-amber-400 text-sm py-1 mt-1 font-bold animate-pulse"><i class="ph-fill ph-check-circle"></i> 照片已暫存，請點擊下方按鈕同步並填表</div>`;
         }
 
         function deletePhoto(photoId) {
@@ -596,17 +567,21 @@
             if (pendingPhotos.length === 0) return alert("目前沒有需要上傳的新照片！");
             
             const btn = document.getElementById('btn-upload-drive');
-            if (btn) { btn.innerHTML = '<i class="ph ph-spinner animate-spin text-lg"></i> 上傳中...'; btn.disabled = true; btn.classList.add('opacity-50'); }
+            if (btn) { btn.innerHTML = '<i class="ph ph-spinner animate-spin text-lg"></i> 上傳建立資料夾並填寫中...'; btn.disabled = true; btn.classList.add('opacity-50'); }
 
             const townshipName = mapData[currentTownshipId].name;
             const pointName = document.getElementById('sheet-title').innerText.trim();
             const itemId = currentItemId;
+            
+            const poiData = mapData[currentTownshipId].points.find(p => p.id === itemId);
+            const agency = poiData ? poiData.agency : "未提供";
+            const unit = poiData ? poiData.unit : "未提供";
+
             let successCount = 0;
 
             for (let i = 0; i < photos.length; i++) {
                 if (photos[i].uploaded) continue;
                 const base64Data = photos[i].data.split(',')[1];
-                // 檔案名稱規則：建檔編號_地點名稱_時間戳
                 const fileName = `${itemId}_${pointName}_${Date.now()}.jpg`;
 
                 try {
@@ -614,7 +589,17 @@
 
                     const response = await fetch(GOOGLE_APP_SCRIPT_URL, {
                         method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({ action: 'upload_photo', township: townshipName, pointName: pointName, filename: fileName, mimeType: "image/jpeg", base64: base64Data })
+                        body: JSON.stringify({ 
+                            action: 'upload_photo', 
+                            township: townshipName, 
+                            pointName: pointName, 
+                            filename: fileName, 
+                            mimeType: "image/jpeg", 
+                            base64: base64Data,
+                            itemId: itemId,     
+                            agency: agency,     
+                            unit: unit          
+                        })
                     });
                     const result = await response.json();
                     if (result.status === "success") { 
@@ -624,47 +609,105 @@
                 } catch (err) { console.error("上傳失敗", err); }
             }
 
-            // 上傳成功後，將照片從本地暫存完全移除，避免出現幽靈預覽圖
             inspectionPhotos[currentItemId] = photos.filter(p => !p.uploaded);
-            if (inspectionPhotos[currentItemId].length === 0) {
-                delete inspectionPhotos[currentItemId];
-            }
+            if (inspectionPhotos[currentItemId].length === 0) delete inspectionPhotos[currentItemId];
 
             saveState(); renderPhotos();
-            if (btn) { btn.disabled = false; btn.classList.remove('opacity-50'); btn.innerHTML = '<i class="ph-fill ph-folder-notch text-lg text-amber-400"></i> 同步至 115年空地空屋 雲端資料夾'; }
-            if(successCount === pendingPhotos.length) alert("✅ 照片已成功上傳至雲端資料夾！");
-            else alert(`⚠️ 上傳完畢。成功: ${successCount} 張，失敗: ${pendingPhotos.length - successCount} 張。`);
+            if (btn) { btn.disabled = false; btn.classList.remove('opacity-50'); btn.innerHTML = '<i class="ph-fill ph-folder-notch text-lg text-amber-400"></i> 上傳建立資料夾並填表'; }
+            
+            if(successCount === pendingPhotos.length) {
+                alert("✅ 照片已成功上傳，自動建立了「鄉鎮 ➔ 地號」資料夾，並已填入巡查表！");
+            } else {
+                alert(`⚠️ 上傳完畢。成功: ${successCount} 張，失敗: ${pendingPhotos.length - successCount} 張。`);
+            }
         }
 
-        function showBottomSheet(title, desc, lat, lng, itemId, townshipName) {
+        // 🌟 點擊後開啟內建預覽器 Lightbox
+        function openLightbox(url) {
+            const lb = document.getElementById('lightbox');
+            const img = document.getElementById('lightbox-img');
+            const loading = document.getElementById('lightbox-loading');
+
+            lb.classList.remove('hidden');
+            void lb.offsetWidth; // 強制重繪
+            lb.classList.remove('opacity-0');
+            img.style.opacity = '0';
+            img.classList.remove('scale-100');
+            img.classList.add('scale-95');
+            loading.style.display = 'flex';
+
+            img.onload = () => {
+                loading.style.display = 'none';
+                img.style.opacity = '1';
+                img.classList.remove('scale-95');
+                img.classList.add('scale-100');
+            };
+            img.src = url;
+        }
+
+        // 🌟 關閉內建預覽器 Lightbox
+        function closeLightbox() {
+            const lb = document.getElementById('lightbox');
+            lb.classList.add('opacity-0');
+            setTimeout(() => {
+                lb.classList.add('hidden');
+                document.getElementById('lightbox-img').src = '';
+            }, 300);
+        }
+
+        // 🌟 顯示 KML 內附的原地圖照片！
+        function showBottomSheet(title, desc, lat, lng, itemId, tId) {
             currentItemId = itemId;
             
-            const sheetTitle = document.getElementById('sheet-title');
-            if(sheetTitle) sheetTitle.innerText = title;
-            
-            const sheetIdBadge = document.getElementById('sheet-id-badge');
-            if(sheetIdBadge) sheetIdBadge.innerText = `編號: ${itemId}`;
-
-            const sheetDesc = document.getElementById('sheet-desc');
-            if(sheetDesc) sheetDesc.innerHTML = desc;
+            document.getElementById('sheet-title').innerText = title;
+            document.getElementById('sheet-id-badge').innerText = `編號: ${itemId}`;
+            document.getElementById('sheet-desc').innerHTML = desc;
             
             const isDone = inspectionState[itemId];
             const btn = document.getElementById('mark-btn');
             const markText = document.getElementById('mark-text');
             
             if (isDone) {
-                if(btn) btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-emerald-500/20 border-emerald-500 text-emerald-400 cursor-pointer mt-1";
-                if(markText) markText.innerText = "已查報";
+                btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-emerald-500/20 border-emerald-500 text-emerald-400 cursor-pointer mt-1";
+                markText.innerText = "已查報";
             } else {
-                if(btn) btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-slate-800 border-slate-600 text-slate-300 cursor-pointer mt-1";
-                if(markText) markText.innerText = "未巡檢";
+                btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-slate-800 border-slate-600 text-slate-300 cursor-pointer mt-1";
+                markText.innerText = "未巡檢";
             }
 
             renderPhotos();
             
+            // 🌟 將原 KML 照片按鈕綁定到新的內建 Lightbox 預覽器
+            const refSection = document.getElementById('ref-photos-section');
+            const refGrid = document.getElementById('ref-photo-grid');
+            const poi = mapData[tId].points.find(p => p.id === itemId);
+            
+            if (poi && poi.images && poi.images.length > 0) {
+                refSection.classList.remove('hidden');
+                refGrid.innerHTML = poi.images.map((url, idx) => `
+                    <div onclick="openLightbox('${url}')" class="w-full bg-slate-900 border border-slate-700 hover:border-emerald-500 rounded-xl p-3 flex items-center justify-between cursor-pointer transition-all active:scale-95 group shadow-lg">
+                        <div class="flex items-center gap-3 overflow-hidden">
+                            <div class="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors shrink-0">
+                                <i class="ph-fill ph-image text-2xl text-slate-400 group-hover:text-emerald-400 transition-colors"></i>
+                            </div>
+                            <div class="flex flex-col overflow-hidden">
+                                <span class="text-white font-bold text-sm truncate">原地圖參考照片 ${idx + 1}</span>
+                                <span class="text-xs text-slate-500 mt-0.5 truncate">點擊開啟高畫質預覽</span>
+                            </div>
+                        </div>
+                        <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-emerald-400 group-hover:bg-emerald-500/20 transition-colors shrink-0">
+                            <i class="ph-bold ph-corners-out text-lg"></i>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                refSection.classList.add('hidden');
+                refGrid.innerHTML = '';
+            }
+            
             const navBtn = document.getElementById('nav-btn');
             if (navBtn) {
-                const destinationQuery = encodeURIComponent(`${lat},${lng}`); // 改用座標精準導航，避免地號 Google Maps 找不到
+                const destinationQuery = encodeURIComponent(`${lat},${lng}`); 
                 navBtn.onclick = () => { window.open(`https://www.google.com/maps/dir/?api=1&destination=${destinationQuery}`, '_blank'); }; 
             }
             
@@ -676,11 +719,6 @@
             const bs = document.getElementById('bottom-sheet');
             if(!bs || bs.classList.contains('hidden-sheet')) return;
             bs.classList.add('hidden-sheet'); currentItemId = null;
-        }
-
-        function hidePwaPrompt() { 
-            const pwa = document.getElementById('pwa-prompt');
-            if(pwa) pwa.classList.add('hidden'); 
         }
 
         function toggleView() {
@@ -698,7 +736,6 @@
             }
         }
 
-        // 🌟 清單模式
         function renderListView(filterText = "") {
             const container = document.getElementById('list-container');
             if(!container) return;
@@ -710,7 +747,7 @@
 
             targetTownships.forEach(tId => {
                 const d = mapData[tId];
-                if (!d) return;
+                if (!d || !d.points) return;
 
                 let itemsHTML = ''; 
                 let tComp = 0; 
@@ -722,14 +759,12 @@
                     if (filterText && !poi.name.includes(filterText) && !poi.id.includes(filterText) && !d.name.includes(filterText)) return;
                     hasAnyResult = true;
                     
-                    const hasPhoto = (inspectionPhotos[poi.id] && inspectionPhotos[poi.id].length > 0);
                     itemsHTML += `
                         <div class="bg-slate-900 border ${isDone ? 'border-emerald-500/30' : 'border-slate-700'} p-4 rounded-xl shadow-lg flex items-center justify-between cursor-pointer active:scale-95 transition-transform" onclick="jumpToMap('${tId}', '${poi.id}', ${poi.lat}, ${poi.lng}, '${poi.name}')">
                             <div class="pr-2">
                                 <div class="text-xs text-slate-400 mb-1 flex flex-wrap gap-2">
                                     <span class="bg-slate-800 px-2 py-0.5 rounded text-amber-400 border border-amber-900/50">${poi.id}</span>
                                     ${isDone ? '<span class="text-emerald-400"><i class="ph-fill ph-check-circle"></i> 已查報</span>' : ''}
-                                    ${hasPhoto ? '<span class="text-amber-400"><i class="ph-fill ph-camera"></i> 照片</span>' : ''}
                                 </div>
                                 <h4 class="text-white font-bold text-base line-clamp-1">${poi.name}</h4>
                                 <div class="text-[11px] text-slate-500 mt-1">${poi.agency} · ${poi.unit}</div>
@@ -753,14 +788,10 @@
             if(!hasAnyResult) container.innerHTML = '<p class="text-slate-500 text-center py-10">找不到符合的地號或編號</p>';
         }
 
-        // 🌟 搜尋與跳轉
         function jumpToMap(tId, itemId, lat, lng, title) {
             if (isListView) toggleView();
-            const searchResults = document.getElementById('search-results');
-            if(searchResults) searchResults.classList.add('hidden');
-            
-            const searchInput = document.getElementById('search-input');
-            if(searchInput) searchInput.value = '';
+            document.getElementById('search-results').classList.add('hidden');
+            document.getElementById('search-input').value = '';
 
             if (currentTownshipId !== tId) loadTownship(tId, true);
             
@@ -774,7 +805,7 @@
                     <div class="text-sm flex items-center gap-2 mt-1"><span class="bg-slate-700 text-white px-2 py-0.5 rounded text-xs font-bold w-[70px] text-center">巡查單位</span> <span class="text-slate-200">${poi.unit}</span></div>
                 </div>
             `;
-            setTimeout(() => { showBottomSheet(title, descHTML, lat, lng, itemId, mapData[tId].name); }, 1000);
+            setTimeout(() => { showBottomSheet(title, descHTML, lat, lng, itemId, tId); }, 1000);
         }
 
         function handleSearch() {
@@ -793,6 +824,7 @@
                 let count = 0;
                 Object.keys(mapData).forEach(tId => {
                     const d = mapData[tId];
+                    if (!d || !d.points) return;
                     d.points.forEach(poi => {
                         if (poi.name.includes(input) || poi.id.includes(input) || d.name.includes(input)) {
                             count++;
@@ -804,85 +836,42 @@
             }
         }
 
-        // 🌟 執行同步與進入主畫面
         async function performSyncAndEnter() {
-            const syncSuccess = await fetchSyncState();
-            if (!syncSuccess) console.warn("⚠️ 讀取雲端資料庫失敗，已載入本地暫存資料。");
-
-            const loginScreen = document.getElementById('login-screen');
-            if (loginScreen) {
-                loginScreen.style.opacity = '0';
-                setTimeout(() => loginScreen.style.display = 'none', 500);
-            }
-            
+            await fetchSyncState();
+            document.getElementById('login-screen').style.display = 'none';
             const splash = document.getElementById('splash-screen');
-            if (splash) {
-                splash.style.opacity = '0'; 
-                setTimeout(() => splash.style.visibility = 'hidden', 500);
-            }
-            
-            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-            if (!isStandalone && !localStorage.getItem('pwa_prompt_shown_v2')) {
-                setTimeout(() => {
-                    const prompt = document.getElementById('pwa-prompt');
-                    if (prompt) { prompt.classList.remove('hidden'); setTimeout(() => prompt.classList.remove('translate-y-[-150%]'), 100); }
-                    localStorage.setItem('pwa_prompt_shown_v2', 'true');
-                }, 2000);
-            }
-
+            splash.style.opacity = '0'; setTimeout(() => splash.style.visibility = 'hidden', 500);
             if(map) map.invalidateSize(); 
-            
-            // 預設載入第一個鄉鎮 (南投市)
-            loadTownship(Object.keys(mapData)[0]);
+            loadTownship(Object.keys(mapData)[0]); // 預設載入第一個鄉鎮(南投市)
         }
 
         async function checkPassword() {
-            const pwdInput = document.getElementById('pwd-input');
-            const pwdError = document.getElementById('pwd-error');
-            if(!pwdInput) return;
-
-            const inputVal = pwdInput.value;
-            if (inputVal === SYSTEM_PASSWORD) {
-                pwdInput.blur(); window.scrollTo(0, 0);
-                if(pwdError) pwdError.style.opacity = '0';
-                
-                const loginBtn = document.getElementById('btn-login');
-                if (loginBtn) loginBtn.innerHTML = '<i class="ph ph-spinner animate-spin text-xl"></i> 同步雲端進度...';
-                
+            const pwdInput = document.getElementById('pwd-input').value;
+            if (pwdInput === SYSTEM_PASSWORD) {
+                document.getElementById('pwd-error').style.opacity = '0';
+                document.getElementById('btn-login').innerHTML = '<i class="ph ph-spinner animate-spin text-xl"></i> 同步雲端進度...';
                 localStorage.setItem('nantou_vacant_system_auth', 'true');
-                
                 await performSyncAndEnter();
             } else {
-                if (pwdError) pwdError.style.opacity = '1'; pwdInput.value = '';
+                document.getElementById('pwd-error').style.opacity = '1'; document.getElementById('pwd-input').value = '';
             }
         }
 
         window.onload = () => {
             initMap();
-            
-            // 動態生成：單一層級 (13鄉鎮膠囊按鈕)
             const townshipSelector = document.getElementById('township-selector');
-            if (townshipSelector) {
-                Object.keys(mapData).forEach((id) => {
-                    const btn = document.createElement('div');
-                    btn.dataset.id = id;
-                    btn.className = `township-pill shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow border bg-slate-800/60 border-slate-700 text-slate-400 cursor-pointer hover:bg-slate-700`;
-                    btn.innerText = mapData[id].name;
-                    btn.onclick = () => loadTownship(id);
-                    townshipSelector.appendChild(btn);
-                });
-            }
+            Object.keys(mapData).forEach((id) => {
+                const btn = document.createElement('div');
+                btn.dataset.id = id;
+                btn.className = `township-pill shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow border bg-slate-800/60 border-slate-700 text-slate-400 cursor-pointer hover:bg-slate-700`;
+                btn.innerText = mapData[id].name;
+                btn.onclick = () => loadTownship(id);
+                townshipSelector.appendChild(btn);
+            });
 
-            const pwdInput = document.getElementById('pwd-input');
-            if(pwdInput) pwdInput.addEventListener('keypress', e => { if (e.key === 'Enter') checkPassword(); });
-            
             if (localStorage.getItem('nantou_vacant_system_auth') === 'true') {
-                const splashText = document.querySelector('#splash-screen .animate-pulse');
-                if(splashText) splashText.innerText = '自動登入中，同步雲端資料...';
-                
-                const loginScreen = document.getElementById('login-screen');
-                if (loginScreen) loginScreen.style.display = 'none';
-                
+                document.querySelector('#splash-screen .animate-pulse').innerText = '自動登入中，同步雲端資料...';
+                document.getElementById('login-screen').style.display = 'none';
                 performSyncAndEnter();
             } else {
                 setTimeout(() => { const splash = document.getElementById('splash-screen'); if (splash) { splash.style.opacity = '0'; splash.style.visibility = 'hidden'; } }, 2000); 
