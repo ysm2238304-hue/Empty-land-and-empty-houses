@@ -94,17 +94,18 @@
         </div>
     </div>
 
-    <!-- 🌟 新增：專屬圖片預覽器 (Lightbox) 🌟 -->
+    <!-- 🌟 新增與修正：專屬圖片預覽器 (Lightbox) - 解決手機遮擋與破圖問題 🌟 -->
     <div id="lightbox" class="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-md hidden flex-col items-center justify-center opacity-0 p-4" onclick="closeLightbox()">
-        <div class="absolute top-6 right-6 z-10 bg-slate-800/80 rounded-full w-10 h-10 flex items-center justify-center cursor-pointer hover:bg-slate-700 text-white border border-slate-600 shadow-xl" onclick="closeLightbox(); event.stopPropagation();">
+        <!-- 修正 1：加入 top-[max(1.5rem,env(safe-area-inset-top))] 避開手機瀏海，並將 z-index 提高到 100 保證不被圖片蓋住 -->
+        <div class="absolute top-[max(1.5rem,env(safe-area-inset-top))] right-4 z-[100] bg-slate-800/80 rounded-full w-10 h-10 flex items-center justify-center cursor-pointer hover:bg-slate-700 text-white border border-slate-600 shadow-xl" onclick="closeLightbox(); event.stopPropagation();">
             <i class="ph-bold ph-x text-xl"></i>
         </div>
         <div id="lightbox-loading" class="absolute flex flex-col items-center justify-center gap-3 text-amber-400 z-0">
             <i class="ph ph-spinner animate-spin text-5xl"></i>
-            <span class="text-sm font-bold tracking-widest">載入高畫質原圖...</span>
+            <span class="text-sm font-bold tracking-widest mt-2">載入高畫質原圖...</span>
         </div>
-        <!-- 圖片在此顯示 -->
-        <img id="lightbox-img" src="" class="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl relative z-10 scale-95 opacity-0" onclick="event.stopPropagation();">
+        <!-- 修正 2：改用 max-h-[85dvh] 適應手機動態網址列，並加入 cursor-pointer，讓「點擊圖片本身」也能直接關閉！ -->
+        <img id="lightbox-img" src="" class="max-w-full max-h-[85dvh] object-contain rounded-xl shadow-2xl relative z-10 scale-95 opacity-0 cursor-pointer" onclick="closeLightbox(); event.stopPropagation();">
     </div>
 
     <!-- PWA 安裝提示 -->
