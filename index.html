@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="空地空屋巡檢">
+    <meta name="theme-color" content="#020617">
+    
+    <link rel="apple-touch-icon" href="app-icon.png">
+    <link rel="manifest" href="manifest.json">
+
+    <title>115年南投縣空地空屋巡檢地圖系統</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
+
+        html, body { 
+            width: 100vw; height: 100dvh; 
+            font-family: 'Noto Sans TC', sans-serif; 
+            background-color: #020617; color: #f8fafc; 
+            margin: 0; padding: 0; overflow: hidden; 
+            overscroll-behavior: none; 
+        }
+
+        .glass { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .glass-panel { background: rgba(30, 41, 59, 0.95); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.7); }
+
+        #splash-screen, #login-screen { transition: opacity 0.5s ease-in-out; }
+        .pulse-ring { animation: pulse 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1); }
+        @keyframes pulse { 0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); } 70% { transform: scale(1.1); box-shadow: 0 0 0 20px rgba(245, 158, 11, 0); } 100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } }
+
+        .leaflet-control-attribution { display: none !important; }
+        .leaflet-control-zoom { border: none !important; margin-top: 200px !important; }
+        .leaflet-bar a { background-color: rgba(30, 41, 59, 0.8) !important; color: #f59e0b !important; border-color: rgba(255,255,255,0.1) !important;}
+
+        .bottom-sheet { transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+        .bottom-sheet.hidden-sheet { transform: translateY(100%); }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .glass-tooltip { background: rgba(15, 23, 42, 0.85) !important; backdrop-filter: blur(4px) !important; border: 1px solid rgba(255, 255, 255, 0.15) !important; color: #f8fafc !important; border-radius: 8px !important; padding: 5px 10px !important; font-size: 12px !important; font-weight: 500 !important; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5) !important; white-space: nowrap !important; }
+        .hide-tooltips .glass-tooltip { opacity: 0 !important; visibility: hidden !important; transition: opacity 0.3s ease; }
+        
+        .user-location-marker { background-color: #3b82f6; border: 2px solid white; border-radius: 50%; width: 16px; height: 16px; box-shadow: 0 0 15px rgba(59, 130, 246, 0.8); position: relative; z-index: 1000; }
+        .user-pulse { position: absolute; top: -8px; left: -8px; width: 32px; height: 32px; background-color: rgba(59, 130, 246, 0.6); border-radius: 50%; animation: user-ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite; }
+        @keyframes user-ping { 75%, 100% { transform: scale(2); opacity: 0; } }
+
+        .safe-top-padding { padding-top: max(1rem, env(safe-area-inset-top)); }
+    </style>
+</head>
+<body>
+
+    <!-- 1. 歡迎頁 -->
+    <div id="splash-screen" class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-950">
+        <div class="relative flex items-center justify-center w-32 h-32 mb-8">
+            <div class="absolute inset-0 rounded-full border-2 border-amber-500 pulse-ring"></div>
+            <i class="ph ph-house-line text-6xl text-amber-400 drop-shadow-[0_0_15px_rgba(245,158,11,0.8)]"></i>
+        </div>
+        <h1 class="text-3xl font-bold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500 mb-2">空地空屋巡檢</h1>
+        <p class="text-slate-400 tracking-widest text-sm uppercase">115年 專案查報系統</p>
+        <div class="mt-12 text-amber-500/50 text-sm animate-pulse">系統載入中 System Loading...</div>
+    </div>
+
+    <!-- 1.5 密碼登入頁面 -->
+    <div id="login-screen" class="fixed inset-0 z-[9998] flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-xl">
+        <div class="glass-panel p-8 rounded-2xl flex flex-col items-center w-10/12 max-w-sm shadow-2xl border border-amber-500/30">
+            <div class="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mb-4">
+                <i class="ph-fill ph-lock-key text-3xl text-amber-400"></i>
+            </div>
+            <h2 class="text-xl font-bold text-white mb-2 tracking-widest">系統登入</h2>
+            <p class="text-slate-400 text-sm mb-6">請輸入授權碼以存取巡檢資料</p>
+            <input type="password" id="pwd-input" placeholder="請輸入密碼" class="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white text-center tracking-widest focus:outline-none focus:border-amber-400 mb-2 transition-colors">
+            <p id="pwd-error" class="text-red-400 text-xs mb-4 h-4 opacity-0 transition-opacity">密碼錯誤，請重新輸入</p>
+            <button id="btn-login" onclick="checkPassword()" class="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold py-3 px-4 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.4)] transition-all active:scale-95 tracking-widest cursor-pointer flex justify-center items-center gap-2">
+                進入系統
+            </button>
+        </div>
+    </div>
+
+    <!-- PWA 安裝提示 -->
+    <div id="pwa-prompt" class="fixed top-4 left-4 right-4 z-[9997] bg-orange-600 text-white p-4 rounded-xl shadow-2xl flex items-start gap-3 hidden transition-transform translate-y-[-150%]">
+        <i class="ph-fill ph-info text-2xl"></i>
+        <div class="flex-1">
+            <h4 class="font-bold mb-1">將系統加入主畫面</h4>
+            <p class="text-sm opacity-90 leading-tight">點擊瀏覽器下方的「分享」按鈕，選擇「加入主畫面」，即可像 App 一樣全螢幕使用！</p>
+        </div>
+        <button onclick="hidePwaPrompt()" class="text-white opacity-70 hover:opacity-100 cursor-pointer"><i class="ph ph-x text-lg"></i></button>
+    </div>
+
+    <!-- 2. 主畫面 (地圖容器) -->
+    <div id="map" class="absolute inset-0 z-0"></div>
+
+    <!-- 3. UI 覆蓋層 -->
+    <div id="ui-layer" class="absolute inset-0 z-10 pointer-events-none">
+        
+        <!-- 頂部選單 -->
+        <div class="pointer-events-auto absolute top-0 left-0 w-full safe-top-padding px-4 pb-3 bg-gradient-to-b from-slate-950 via-slate-950/95 to-transparent z-[50]">
+            <div class="flex items-center justify-between mb-3 mt-2">
+                <h2 class="text-lg font-bold flex items-center gap-2 text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">
+                    <i class="ph-fill ph-map-pin text-amber-400" id="header-icon"></i>
+                    <span id="header-title">請選擇鄉鎮</span>
+                </h2>
+                <div class="flex gap-2">
+                    <button class="glass w-10 h-10 rounded-full text-slate-300 hover:text-white flex justify-center items-center cursor-pointer" onclick="toggleView()" id="btn-toggle-view">
+                        <i class="ph-fill ph-list text-xl"></i>
+                    </button>
+                    <button class="glass w-10 h-10 rounded-full text-slate-300 hover:text-white flex justify-center items-center cursor-pointer" onclick="if(currentBounds && map) map.fitBounds(currentBounds, { padding: [50, 50] })">
+                        <i class="ph ph-corners-out text-xl"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 全局搜尋列 -->
+            <div class="relative w-full mb-3">
+                <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg"></i>
+                <input type="text" id="search-input" placeholder="搜尋建檔編號或地點名稱..." class="w-full bg-slate-800/80 border border-slate-700 rounded-full pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-amber-400 transition-colors" oninput="handleSearch()">
+                <div id="search-results" class="absolute top-full left-0 right-0 mt-1 bg-slate-800 rounded-xl shadow-2xl z-[60] hidden max-h-48 overflow-y-auto border border-slate-700"></div>
+            </div>
+            
+            <!-- 單一階層：鄉鎮市橫向浮動按鈕 -->
+            <div class="flex gap-2 overflow-x-auto no-scrollbar py-1 mb-2 w-full touch-pan-x" style="-webkit-overflow-scrolling: touch;" id="township-selector">
+                <!-- JavaScript 動態生成小膠囊按鈕 -->
+            </div>
+
+            <!-- 戰情進度儀表板 -->
+            <div class="w-full px-1">
+                <div class="flex justify-between text-[11px] text-slate-400 font-bold mb-1">
+                    <span id="progress-text">🏆 總體達成率：0/0 點位</span>
+                    <span id="progress-percent" class="text-amber-400">0%</span>
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                    <div id="progress-bar" class="bg-gradient-to-r from-amber-400 to-orange-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. 清單模式 (List View) -->
+        <div id="list-view" class="pointer-events-auto absolute inset-0 z-[45] bg-slate-950 overflow-y-auto hidden pt-[200px] pb-10 px-4" style="touch-action: pan-y;">
+            <h3 id="list-main-title" class="text-lg font-bold text-amber-400 mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
+                <i class="ph-fill ph-list-bullets"></i> 巡檢清單
+            </h3>
+            <div id="list-container" class="flex flex-col gap-4">
+                <!-- JavaScript 動態階層式生成清單 -->
+            </div>
+        </div>
+
+        <!-- 5. 底部資訊與多照片面板 -->
+        <div id="bottom-sheet" class="pointer-events-auto absolute bottom-0 left-0 bottom-sheet hidden-sheet glass-panel w-full rounded-t-3xl p-5 pb-8 shadow-[0_-20px_50px_rgba(0,0,0,0.8)] max-h-[60vh] overflow-y-auto flex flex-col z-[60]" style="touch-action: pan-y;">
+            
+            <div class="flex justify-between items-center mb-4">
+                <div class="w-8 h-1.5"></div>
+                <div class="w-12 h-1.5 bg-slate-600 rounded-full cursor-pointer" onclick="hideBottomSheet()"></div>
+                <button class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-800/80 text-slate-400 hover:text-white cursor-pointer" onclick="hideBottomSheet()">
+                    <i class="ph-bold ph-x text-lg"></i>
+                </button>
+            </div>
+            
+            <div id="sheet-content" class="flex-1">
+                <div class="flex justify-between items-start mb-4 border-b border-slate-700/50 pb-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-white mb-1" id="sheet-title">點位名稱</h3>
+                        <div class="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded inline-block" id="sheet-id-badge">編號</div>
+                    </div>
+                    <button id="mark-btn" class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all border cursor-pointer mt-1" onclick="toggleItemStatus()">
+                        <i class="ph-fill ph-check-circle text-lg"></i> <span id="mark-text">未巡檢</span>
+                    </button>
+                </div>
+                
+                <div class="text-sm text-slate-300 mb-5 w-full bg-slate-900/50 p-3 rounded-xl border border-slate-700/50" id="sheet-desc">詳細資訊</div>
+                
+                <!-- 照片上傳區 -->
+                <div class="mb-5 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="text-sm font-bold text-slate-300 flex items-center gap-2">
+                            <i class="ph-fill ph-camera text-amber-400"></i> 現地查報照片
+                        </h4>
+                        <label class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-lg">
+                            <i class="ph ph-upload-simple text-base"></i> 拍攝上傳
+                            <input type="file" accept="image/*" multiple class="hidden" onchange="handlePhotoUpload(event)">
+                        </label>
+                    </div>
+                    <div id="photo-preview-grid" class="grid grid-cols-3 gap-2 mb-3 empty:hidden"></div>
+                    <button id="btn-upload-drive" onclick="uploadPhotosToDrive()" class="w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white text-sm font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors mt-2 cursor-pointer shadow-lg">
+                        <i class="ph-fill ph-folder-notch text-lg text-amber-400"></i> 同步至 115年空地空屋 雲端資料夾
+                    </button>
+                </div>
+
+                <button id="nav-btn" class="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 cursor-pointer">
+                    <i class="ph-fill ph-navigation-arrow text-xl"></i>
+                    <span>開啟 Google Maps 導航</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 6. 實時定位按鈕 -->
+        <button id="locate-btn" class="pointer-events-auto absolute bottom-8 right-4 z-[40] glass p-3 rounded-full text-amber-400 hover:text-white shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all active:scale-95 cursor-pointer" onclick="locateUser()">
+            <i class="ph-fill ph-crosshair text-2xl"></i>
+        </button>
+    </div>
+
+    <!-- ==========================================
+         JavaScript 詳細設定與核心邏輯 
+         ========================================== -->
+    <script>
+        // 🚨 GAS 雲端資料庫網址 (已自動寫入您最新部署的網址！)
+        const GOOGLE_APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyLHvYPz6eJoiWOAXpGL-tFInwel8EnaHUYXPNHR04Z10n_FcI-zxALMfHCRzn5xg-TnA/exec"; 
+        
+        const SYSTEM_PASSWORD = "54004658";
+
+        // --- 完整空地空屋 KML 解析資料庫 ---
+        const mapData = {
+            "nantou": {
+                name: "南投市",
+                points: [
+                    { id: "A-1000801016-00003", name: "三塊厝33-3地號", lat: 23.90061, lng: 120.69019, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000801016-00004", name: "三塊厝76-104地號", lat: 23.90058, lng: 120.69046, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000801016-00005", name: "三塊厝76-110地號", lat: 23.90057, lng: 120.69033, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000801033-00001", name: "光興段750地號", lat: 23.94243, lng: 120.69679, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000801018-00001", name: "茄苳腳段469-28地號", lat: 23.89375, lng: 120.67518, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000801027-00002", name: "首區段100地號", lat: 23.95301, lng: 120.68622, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000801027-00004", name: "首區段106地號", lat: 23.95278, lng: 120.68631, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000801029-00002", name: "福溪段82地號", lat: 23.92547, lng: 120.69025, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000801029-00001", name: "福溪段86地號", lat: 23.92492, lng: 120.6905, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000801003-00001", name: "藍田段7地號", lat: 23.91087, lng: 120.68195, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000801015-00002", name: "南投高中校外空地", lat: 23.90801, lng: 120.68288, agency: "教育部", unit: "南投高中" },
+                    { id: "B-1000801005-00001", name: "南投高中校外眷舍", lat: 23.90795, lng: 120.68308, agency: "教育部", unit: "南投高中" },
+                    { id: "B-1000801031-00001", name: "中興新村基地", lat: 23.95632, lng: 120.6892, agency: "文化部", unit: "國立臺灣工藝研究發展中心" },
+                    { id: "Q-10008-00047", name: "南投酒廠-廠房拆除及新建", lat: 23.92129, lng: 120.70491, agency: "財政部", unit: "南投酒廠" }
+                ]
+            },
+            "caotun": {
+                name: "草屯鎮",
+                points: [
+                    { id: "A-1000803007-00002", name: "同德段96地號", lat: 24.00141, lng: 120.69609, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000803007-00003", name: "同德段98地號", lat: 24.00153, lng: 120.69599, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000803014-00001", name: "新光段1258地號", lat: 23.99063, lng: 120.65689, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000803014-00002", name: "北投段318-2地號", lat: 23.98934, lng: 120.65616, agency: "財政部", unit: "國有財產署中區分署南投辦事處" }
+                ]
+            },
+            "puli": {
+                name: "埔里鎮",
+                points: [
+                    { id: "A-1000802025-00001", name: "福興里福興路", lat: 24.01465, lng: 120.96398, agency: "經濟部", unit: "台糖公司中彰區處" },
+                    { id: "A-1000802028-00002", name: "榮光段 1135地號", lat: 23.971251, lng: 120.996544, agency: "未提供", unit: "未提供" },
+                    { id: "A-1000802009-00001", name: "籃城段287地號", lat: 23.99074, lng: 120.96006, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000802030-00001", name: "埔里段北門小段47地號", lat: 23.97013, lng: 120.97204, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000802008-00004", name: "忠信段652地號", lat: 23.97064, lng: 120.9524, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000802008-00005", name: "忠信段657地號", lat: 23.97054, lng: 120.95278, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "B-1000802008-00001", name: "大城里大城路10號", lat: 23.97147, lng: 120.95974, agency: "財政部", unit: "南投縣政府稅務局" },
+                    { id: "B-1000802008-00002", name: "大城里公誠路26巷5號", lat: 23.97136, lng: 120.95972, agency: "財政部", unit: "南投縣政府稅務局" }
+                ]
+            },
+            "zhushan": {
+                name: "竹山鎮",
+                points: [
+                    { id: "B-1000804001-00003", name: "大禮路6巷5號", lat: 23.75783, lng: 120.68209, agency: "財政部", unit: "南投縣政府稅務局" },
+                    { id: "B-1000804001-00002", name: "大禮路18巷12號", lat: 23.75782, lng: 120.682, agency: "財政部", unit: "南投縣政府稅務局" },
+                    { id: "B-1000804001-00001", name: "前山路橫巷4之2號", lat: 23.75798, lng: 120.68194, agency: "財政部", unit: "南投縣政府稅務局" },
+                    { id: "A-1000804012-00001", name: "溪尾段28-7地號", lat: 23.79012, lng: 120.7084, agency: "財政部", unit: "國有財產署中區分署南投辦事處" }
+                ]
+            },
+            "mingjian": {
+                name: "名間鄉",
+                points: [
+                    { id: "A-1000806011-00002", name: "北大庄段166地號土地", lat: 23.8836925, lng: 120.6536791, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000806016-00003", name: "新弓鞋段81地號", lat: 23.85268, lng: 120.63495, agency: "財政部", unit: "財政部國有財產署南投辦事處" },
+                    { id: "A-1000806010-00003", name: "南田子段 339地號", lat: 23.8610205, lng: 120.6676657, agency: "財政部", unit: "國有財產署中區分署南投辦事處" }
+                ]
+            },
+            "jiji": {
+                name: "集集鎮",
+                points: [
+                    { id: "B-1000805006-00001", name: "臺灣菸酒股份有限公司臺中營業處集集營業站", lat: 23.82833, lng: 120.79077, agency: "財政部", unit: "臺灣菸酒股份有限公司臺中營業處" }
+                ]
+            },
+            "shuili": {
+                name: "水里鄉",
+                points: [
+                    { id: "A-1000811006-00001", name: "鉅工段992地號", lat: 23.81363, lng: 120.85418, agency: "財政部", unit: "國有財產署中區分署南投辦事處" },
+                    { id: "A-1000811005-00002", name: "水里段0161-0000地號-空地", lat: 23.81822, lng: 120.85408, agency: "交通部", unit: "中華郵政股份有限公司南投郵局" }
+                ]
+            },
+            "yuchi": {
+                name: "魚池鄉",
+                points: [
+                    { id: "A-1000809010-00005", name: "明潭段136地號", lat: 23.86797, lng: 120.90906, agency: "財政部", unit: "國有財產署中區分署南投辦事處" }
+                ]
+            }
+        };
+
+        // --- 狀態保存 (空地空屋專用，完全避開舊版的清潔考核資料) ---
+        let inspectionState = JSON.parse(localStorage.getItem('nantou_vacant_inspection')) || {};
+        let inspectionPhotos = JSON.parse(localStorage.getItem('nantou_vacant_photos_v1')) || {}; 
+        
+        let currentTownshipId = null;
+        let currentItemId = null; 
+
+        // 向 Google 雲端讀取進度
+        async function fetchSyncState() {
+            try {
+                const res = await fetch(GOOGLE_APP_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'get_status' })
+                });
+
+                if (!res.ok) throw new Error("HTTP 狀態碼異常：" + res.status);
+
+                const responseText = await res.text();
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch(parseError) {
+                    console.error("雲端回傳的不是 JSON 格式:", responseText);
+                    return false;
+                }
+
+                if (result.status === 'success' && result.data) {
+                    inspectionState = result.data;
+                    localStorage.setItem('nantou_vacant_inspection', JSON.stringify(inspectionState));
+                    return true;
+                } else {
+                    return false;
+                }
+            } catch(e) {
+                return false;
+            }
+        }
+
+        function saveState() {
+            localStorage.setItem('nantou_vacant_inspection', JSON.stringify(inspectionState));
+            try { localStorage.setItem('nantou_vacant_photos_v1', JSON.stringify(inspectionPhotos)); } catch(e) { alert("手機暫存空間已滿！請先清除已上傳的照片。"); }
+            updateProgressBar();
+            if(!isListView) {
+                loadTownship(currentTownshipId, true);
+            } else {
+                renderListView(); 
+            }
+        }
+
+        // --- 地圖核心 ---
+        let map;
+        let activeLayers = [];
+        let currentBounds = null;
+        let userMarker = null;
+        let isListView = false;
+
+        function createPointIcon(isDone) {
+            const iconColor = isDone ? '#64748b' : '#f59e0b';
+            const opacity = isDone ? 0.7 : 1;
+            return L.divIcon({ 
+                className: 'custom-leaflet-icon', 
+                html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40" style="opacity:${opacity}">
+                        <circle cx="20" cy="20" r="18" fill="rgba(15, 23, 42, 0.9)" stroke="${iconColor}" stroke-width="2"/>
+                        ${opacity === 1 ? `<circle cx="20" cy="20" r="24" fill="none" stroke="${iconColor}" stroke-width="1" opacity="0.4" class="pulse"/>` : ''}
+                        <foreignObject x="8" y="8" width="24" height="24">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="display:flex; justify-content:center; align-items:center; height:100%; color:${iconColor}; font-size:18px;">
+                                <i class="ph-fill ph-house-line"></i>
+                            </div>
+                        </foreignObject>
+                       </svg>`, 
+                iconSize: [40, 40], iconAnchor: [20, 20] 
+            });
+        }
+
+        function initMap() {
+            map = L.map('map', { zoomControl: false, tap: false }).setView([23.903, 120.951], 10);
+            L.control.zoom({ position: 'topright' }).addTo(map);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { 
+                attribution: '&copy; OpenStreetMap', subdomains: 'abcd', maxZoom: 20 
+            }).addTo(map);
+            
+            map.on('click', function() {
+                const bs = document.getElementById('bottom-sheet');
+                if(bs && !bs.classList.contains('hidden-sheet')) hideBottomSheet();
+            });
+
+            map.on('zoomend', function() { 
+                const mapEl = document.getElementById('map');
+                if (mapEl) {
+                    if(map.getZoom() < 12) mapEl.classList.add('hide-tooltips');
+                    else mapEl.classList.remove('hide-tooltips');
+                }
+            });
+        }
+
+        // 🌟 繪圖共用引擎 (依據點位資料繪製)
+        function drawMapForTownship(tId) {
+            const bounds = [];
+            const data = mapData[tId];
+            if(!data) return bounds;
+
+            data.points.forEach(poi => {
+                const isDone = inspectionState[poi.id];
+                const marker = L.marker([poi.lat, poi.lng], { icon: createPointIcon(isDone) }).addTo(map);
+                
+                marker.on('click', (e) => {
+                    L.DomEvent.stopPropagation(e);
+                    map.flyTo([poi.lat, poi.lng], 16, { animate: true, duration: 1.2 });
+                    
+                    const descHTML = `
+                        <div class="flex flex-col gap-2">
+                            <div class="text-sm flex items-center gap-2"><span class="bg-slate-700 text-white px-2 py-0.5 rounded text-xs font-bold w-[70px] text-center">主管機關</span> <span class="text-white">${poi.agency}</span></div>
+                            <div class="text-sm flex items-center gap-2 mt-1"><span class="bg-slate-700 text-white px-2 py-0.5 rounded text-xs font-bold w-[70px] text-center">巡查單位</span> <span class="text-slate-200">${poi.unit}</span></div>
+                        </div>
+                    `;
+                    showBottomSheet(poi.name, descHTML, poi.lat, poi.lng, poi.id, data.name);
+                });
+                
+                const colorClass = isDone ? 'text-slate-400' : 'text-amber-400';
+                marker.bindTooltip(`<span class="${colorClass} font-bold">${poi.name}${isDone ? ' (已巡檢)' : ''}</span>`, { permanent: true, direction: 'top', className: 'glass-tooltip', offset: [0, -20] });
+                activeLayers.push(marker); 
+                bounds.push([poi.lat, poi.lng]);
+            });
+
+            return bounds;
+        }
+
+        // 🌟 載入單一鄉鎮
+        function loadTownship(tId, keepHighlight = false) {
+            currentTownshipId = tId;
+            const data = mapData[tId];
+            if (!data) return;
+
+            const headerTitle = document.getElementById('header-title');
+            if(headerTitle) headerTitle.innerText = `${data.name} 查報視角`;
+
+            const listTitle = document.getElementById('list-main-title');
+            if(listTitle) listTitle.innerHTML = `<i class="ph-fill ph-map-pin"></i> ${data.name} 巡檢清單`;
+
+            // 鄉鎮按鈕亮起
+            document.querySelectorAll('.township-pill').forEach(btn => {
+                if(btn.dataset.id === tId) {
+                    btn.className = 'township-pill shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow-lg bg-orange-600/90 border border-orange-400 text-white cursor-pointer shadow-[0_0_10px_rgba(249,115,22,0.4)]';
+                } else {
+                    btn.className = 'township-pill shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow border bg-slate-800/60 border-slate-700 text-slate-400 cursor-pointer hover:bg-slate-700';
+                }
+            });
+
+            activeLayers.forEach(layer => map.removeLayer(layer)); activeLayers = [];
+            if (!keepHighlight) hideBottomSheet(); 
+
+            const bounds = drawMapForTownship(tId);
+            updateProgressBar();
+
+            if (!keepHighlight && bounds.length > 0) {
+                currentBounds = L.latLngBounds(bounds);
+                map.fitBounds(currentBounds, { padding: [50, 50], animate: true, duration: 1.5 });
+            }
+        }
+
+        // 🌟 進度儀表板
+        function updateProgressBar() {
+            if (!currentTownshipId) return;
+            const data = mapData[currentTownshipId];
+            if(!data) return;
+            
+            const total = data.points.length;
+            let comp = 0;
+            data.points.forEach(poi => { if(inspectionState[poi.id]) comp++; });
+            
+            const pct = total === 0 ? 0 : Math.round((comp / total) * 100);
+            const progressText = document.getElementById('progress-text');
+            if(progressText) progressText.innerText = `📍 ${data.name} 達成率：${comp} / ${total} 點位`;
+            
+            const progressPercent = document.getElementById('progress-percent');
+            if(progressPercent) progressPercent.innerText = `${pct}%`;
+            
+            const progressBar = document.getElementById('progress-bar');
+            if(progressBar) progressBar.style.width = `${pct}%`;
+        }
+
+        async function toggleItemStatus() {
+            if(!currentItemId) return;
+            const newState = !inspectionState[currentItemId];
+            const btn = document.getElementById('mark-btn');
+            const markText = document.getElementById('mark-text');
+
+            if(btn) { btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-amber-500/20 border-amber-500 text-amber-400 cursor-wait"; btn.disabled = true; }
+            if(markText) markText.innerHTML = '<i class="ph ph-spinner animate-spin"></i> 同步中...';
+
+            try {
+                if(GOOGLE_APP_SCRIPT_URL.includes("請在此貼上")) throw new Error("尚未設定新的 GAS 網址，請回 index.html 第 173 行修改");
+
+                const response = await fetch(GOOGLE_APP_SCRIPT_URL, {
+                    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'set_status', itemId: currentItemId, isDone: newState })
+                });
+                
+                if (!response.ok) throw new Error("HTTP 狀態碼異常：" + response.status);
+                const responseText = await response.text();
+                let result;
+                try { result = JSON.parse(responseText); } catch(e) { throw new Error("雲端回傳非預期格式，可能被 Google 權限阻擋。"); }
+
+                if (result.status === 'success') {
+                    inspectionState[currentItemId] = newState;
+                    saveState(); 
+                    if (newState) {
+                        if(btn) btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-emerald-500/20 border-emerald-500 text-emerald-400 cursor-pointer";
+                        if(markText) markText.innerText = "已查報";
+                    } else {
+                        if(btn) btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-slate-800 border-slate-600 text-slate-300 cursor-pointer";
+                        if(markText) markText.innerText = "未巡檢";
+                    }
+                } else { throw new Error(result.message); }
+            } catch(e) {
+                alert("⚠️ 雲端同步失敗！請確認網路及 GAS 權限。\n詳細：" + e.message);
+                const isDone = inspectionState[currentItemId];
+                if (isDone) {
+                    if(btn) btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-emerald-500/20 border-emerald-500 text-emerald-400 cursor-pointer";
+                    if(markText) markText.innerText = "已查報";
+                } else {
+                    if(btn) btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-slate-800 border-slate-600 text-slate-300 cursor-pointer";
+                    if(markText) markText.innerText = "未巡檢";
+                }
+            } finally { if(btn) btn.disabled = false; }
+        }
+
+        function handlePhotoUpload(event) {
+            const files = event.target.files;
+            if(!files.length || !currentItemId) return;
+
+            if (!inspectionPhotos[currentItemId]) inspectionPhotos[currentItemId] = [];
+            const grid = document.getElementById('photo-preview-grid');
+            if(grid) grid.innerHTML += `<div class="col-span-3 text-center text-amber-400 text-sm py-2 font-bold animate-pulse" id="loading-txt"><i class="ph ph-spinner animate-spin"></i> 照片已準備上傳...</div>`;
+
+            let processed = 0;
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        let w = img.width, h = img.height;
+                        if (w > 800) { h *= 800 / w; w = 800; }
+                        canvas.width = w; canvas.height = h;
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                        inspectionPhotos[currentItemId].push({ id: Date.now() + Math.random(), data: canvas.toDataURL('image/jpeg', 0.6), uploaded: false });
+                        processed++;
+                        if(processed === files.length) { saveState(); renderPhotos(); }
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+            event.target.value = '';
+        }
+
+        function renderPhotos() {
+            const grid = document.getElementById('photo-preview-grid');
+            if(!grid) return;
+            
+            // 自動清除舊版殘留的「已上傳空殼紀錄」
+            if (inspectionPhotos[currentItemId]) {
+                inspectionPhotos[currentItemId] = inspectionPhotos[currentItemId].filter(p => !p.uploaded);
+                if (inspectionPhotos[currentItemId].length === 0) delete inspectionPhotos[currentItemId];
+            }
+
+            const photos = inspectionPhotos[currentItemId] || [];
+            grid.innerHTML = ''; let hasPending = false;
+
+            photos.forEach((photo) => {
+                if(!photo.uploaded) hasPending = true;
+                const imgContent = photo.data ? `<img src="${photo.data}" class="w-full h-full object-cover">` : `<i class="ph-fill ph-image text-4xl text-slate-600"></i>`;
+                grid.innerHTML += `
+                    <div class="relative w-full aspect-square rounded-lg border border-slate-600 overflow-hidden group bg-slate-800 flex items-center justify-center">
+                        ${imgContent}
+                        ${photo.uploaded 
+                            ? `<div class="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-1"><i class="ph-fill ph-check-circle text-emerald-400 text-3xl drop-shadow-md"></i><span class="text-[10px] font-bold text-emerald-400">已存雲端</span></div>` 
+                            : `<button onclick="deletePhoto('${photo.id}')" class="absolute top-1 right-1 bg-red-500/80 text-white w-6 h-6 rounded-full flex items-center justify-center backdrop-blur cursor-pointer"><i class="ph-bold ph-x text-xs"></i></button>`
+                        }
+                    </div>
+                `;
+            });
+            if(hasPending) grid.innerHTML += `<div class="col-span-3 text-center text-amber-400 text-sm py-1 mt-1 font-bold animate-pulse"><i class="ph-fill ph-check-circle"></i> 照片已暫存，請點擊下方按鈕同步至雲端</div>`;
+        }
+
+        function deletePhoto(photoId) {
+            if(!confirm("確定要刪除這張尚未上傳的照片嗎？")) return;
+            inspectionPhotos[currentItemId] = inspectionPhotos[currentItemId].filter(p => p.id !== photoId);
+            saveState(); renderPhotos();
+        }
+
+        async function uploadPhotosToDrive() {
+            const photos = inspectionPhotos[currentItemId] || [];
+            const pendingPhotos = photos.filter(p => !p.uploaded);
+            
+            if (pendingPhotos.length === 0) return alert("目前沒有需要上傳的新照片！");
+            
+            const btn = document.getElementById('btn-upload-drive');
+            if (btn) { btn.innerHTML = '<i class="ph ph-spinner animate-spin text-lg"></i> 上傳中...'; btn.disabled = true; btn.classList.add('opacity-50'); }
+
+            const townshipName = mapData[currentTownshipId].name;
+            const pointName = document.getElementById('sheet-title').innerText.trim();
+            const itemId = currentItemId;
+            let successCount = 0;
+
+            for (let i = 0; i < photos.length; i++) {
+                if (photos[i].uploaded) continue;
+                const base64Data = photos[i].data.split(',')[1];
+                // 檔案名稱規則：建檔編號_地點名稱_時間戳
+                const fileName = `${itemId}_${pointName}_${Date.now()}.jpg`;
+
+                try {
+                    if(GOOGLE_APP_SCRIPT_URL.includes("請在此貼上")) throw new Error("尚未設定新網址");
+
+                    const response = await fetch(GOOGLE_APP_SCRIPT_URL, {
+                        method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action: 'upload_photo', township: townshipName, pointName: pointName, filename: fileName, mimeType: "image/jpeg", base64: base64Data })
+                    });
+                    const result = await response.json();
+                    if (result.status === "success") { 
+                        photos[i].uploaded = true; 
+                        successCount++; 
+                    }
+                } catch (err) { console.error("上傳失敗", err); }
+            }
+
+            // 上傳成功後，將照片從本地暫存完全移除，避免出現幽靈預覽圖
+            inspectionPhotos[currentItemId] = photos.filter(p => !p.uploaded);
+            if (inspectionPhotos[currentItemId].length === 0) {
+                delete inspectionPhotos[currentItemId];
+            }
+
+            saveState(); renderPhotos();
+            if (btn) { btn.disabled = false; btn.classList.remove('opacity-50'); btn.innerHTML = '<i class="ph-fill ph-folder-notch text-lg text-amber-400"></i> 同步至 115年空地空屋 雲端資料夾'; }
+            if(successCount === pendingPhotos.length) alert("✅ 照片已成功上傳至雲端資料夾！");
+            else alert(`⚠️ 上傳完畢。成功: ${successCount} 張，失敗: ${pendingPhotos.length - successCount} 張。`);
+        }
+
+        function showBottomSheet(title, desc, lat, lng, itemId, townshipName) {
+            currentItemId = itemId;
+            
+            const sheetTitle = document.getElementById('sheet-title');
+            if(sheetTitle) sheetTitle.innerText = title;
+            
+            const sheetIdBadge = document.getElementById('sheet-id-badge');
+            if(sheetIdBadge) sheetIdBadge.innerText = `編號: ${itemId}`;
+
+            const sheetDesc = document.getElementById('sheet-desc');
+            if(sheetDesc) sheetDesc.innerHTML = desc;
+            
+            const isDone = inspectionState[itemId];
+            const btn = document.getElementById('mark-btn');
+            const markText = document.getElementById('mark-text');
+            
+            if (isDone) {
+                if(btn) btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-emerald-500/20 border-emerald-500 text-emerald-400 cursor-pointer mt-1";
+                if(markText) markText.innerText = "已查報";
+            } else {
+                if(btn) btn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-slate-800 border-slate-600 text-slate-300 cursor-pointer mt-1";
+                if(markText) markText.innerText = "未巡檢";
+            }
+
+            renderPhotos();
+            
+            const navBtn = document.getElementById('nav-btn');
+            if (navBtn) {
+                const destinationQuery = encodeURIComponent(`${lat},${lng}`); // 改用座標精準導航，避免地號 Google Maps 找不到
+                navBtn.onclick = () => { window.open(`https://www.google.com/maps/dir/?api=1&destination=${destinationQuery}`, '_blank'); }; 
+            }
+            
+            const bs = document.getElementById('bottom-sheet');
+            if (bs) bs.classList.remove('hidden-sheet');
+        }
+
+        function hideBottomSheet() { 
+            const bs = document.getElementById('bottom-sheet');
+            if(!bs || bs.classList.contains('hidden-sheet')) return;
+            bs.classList.add('hidden-sheet'); currentItemId = null;
+        }
+
+        function hidePwaPrompt() { 
+            const pwa = document.getElementById('pwa-prompt');
+            if(pwa) pwa.classList.add('hidden'); 
+        }
+
+        function toggleView() {
+            isListView = !isListView;
+            const listEl = document.getElementById('list-view');
+            const btnIcon = document.querySelector('#btn-toggle-view i');
+            hideBottomSheet();
+
+            if (listEl && btnIcon) {
+                if (isListView) {
+                    listEl.classList.remove('hidden'); btnIcon.className = "ph-fill ph-map-trifold text-xl text-amber-400"; renderListView();
+                } else {
+                    listEl.classList.add('hidden'); btnIcon.className = "ph-fill ph-list text-xl"; if (map) map.invalidateSize(); 
+                }
+            }
+        }
+
+        // 🌟 清單模式
+        function renderListView(filterText = "") {
+            const container = document.getElementById('list-container');
+            if(!container) return;
+            container.innerHTML = '';
+            
+            let targetTownships = filterText ? Object.keys(mapData) : [currentTownshipId];
+            if (targetTownships.length === 0) return;
+            let hasAnyResult = false;
+
+            targetTownships.forEach(tId => {
+                const d = mapData[tId];
+                if (!d) return;
+
+                let itemsHTML = ''; 
+                let tComp = 0; 
+                let tTotal = d.points.length;
+                
+                d.points.forEach(poi => {
+                    const isDone = inspectionState[poi.id];
+                    if(isDone) tComp++; 
+                    if (filterText && !poi.name.includes(filterText) && !poi.id.includes(filterText) && !d.name.includes(filterText)) return;
+                    hasAnyResult = true;
+                    
+                    const hasPhoto = (inspectionPhotos[poi.id] && inspectionPhotos[poi.id].length > 0);
+                    itemsHTML += `
+                        <div class="bg-slate-900 border ${isDone ? 'border-emerald-500/30' : 'border-slate-700'} p-4 rounded-xl shadow-lg flex items-center justify-between cursor-pointer active:scale-95 transition-transform" onclick="jumpToMap('${tId}', '${poi.id}', ${poi.lat}, ${poi.lng}, '${poi.name}')">
+                            <div class="pr-2">
+                                <div class="text-xs text-slate-400 mb-1 flex flex-wrap gap-2">
+                                    <span class="bg-slate-800 px-2 py-0.5 rounded text-amber-400 border border-amber-900/50">${poi.id}</span>
+                                    ${isDone ? '<span class="text-emerald-400"><i class="ph-fill ph-check-circle"></i> 已查報</span>' : ''}
+                                    ${hasPhoto ? '<span class="text-amber-400"><i class="ph-fill ph-camera"></i> 照片</span>' : ''}
+                                </div>
+                                <h4 class="text-white font-bold text-base line-clamp-1">${poi.name}</h4>
+                                <div class="text-[11px] text-slate-500 mt-1">${poi.agency} · ${poi.unit}</div>
+                            </div>
+                            <div class="w-10 h-10 shrink-0 rounded-full bg-slate-800 flex items-center justify-center text-amber-400"><i class="ph-fill ph-navigation-arrow text-lg"></i></div>
+                        </div>`;
+                });
+
+                if (itemsHTML !== '') {
+                    container.innerHTML += `
+                        <div class="mt-4 mb-2">
+                            <h4 class="text-white font-bold text-base flex items-center gap-2 bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
+                                <i class="ph-fill ph-map-pin text-orange-400"></i> ${d.name} 
+                                <span class="text-xs text-slate-400 font-normal ml-auto">進度 ${tComp}/${tTotal}</span>
+                            </h4>
+                        </div>
+                        <div class="flex flex-col gap-3 pl-2 border-l-2 border-slate-800 ml-3">${itemsHTML}</div>
+                    `;
+                }
+            });
+            if(!hasAnyResult) container.innerHTML = '<p class="text-slate-500 text-center py-10">找不到符合的地號或編號</p>';
+        }
+
+        // 🌟 搜尋與跳轉
+        function jumpToMap(tId, itemId, lat, lng, title) {
+            if (isListView) toggleView();
+            const searchResults = document.getElementById('search-results');
+            if(searchResults) searchResults.classList.add('hidden');
+            
+            const searchInput = document.getElementById('search-input');
+            if(searchInput) searchInput.value = '';
+
+            if (currentTownshipId !== tId) loadTownship(tId, true);
+            
+            const poi = mapData[tId].points.find(p => p.id === itemId);
+            if(!poi) return;
+
+            map.flyTo([lat, lng], 16, { animate: true, duration: 1.2 });
+            const descHTML = `
+                <div class="flex flex-col gap-2">
+                    <div class="text-sm flex items-center gap-2"><span class="bg-slate-700 text-white px-2 py-0.5 rounded text-xs font-bold w-[70px] text-center">主管機關</span> <span class="text-white">${poi.agency}</span></div>
+                    <div class="text-sm flex items-center gap-2 mt-1"><span class="bg-slate-700 text-white px-2 py-0.5 rounded text-xs font-bold w-[70px] text-center">巡查單位</span> <span class="text-slate-200">${poi.unit}</span></div>
+                </div>
+            `;
+            setTimeout(() => { showBottomSheet(title, descHTML, lat, lng, itemId, mapData[tId].name); }, 1000);
+        }
+
+        function handleSearch() {
+            const input = document.getElementById('search-input').value.trim();
+            const resultBox = document.getElementById('search-results');
+            if(!resultBox) return;
+
+            if (input.length === 0) {
+                resultBox.classList.add('hidden');
+                if (isListView) renderListView(); return;
+            }
+
+            if (isListView) { renderListView(input); } 
+            else {
+                resultBox.innerHTML = '';
+                let count = 0;
+                Object.keys(mapData).forEach(tId => {
+                    const d = mapData[tId];
+                    d.points.forEach(poi => {
+                        if (poi.name.includes(input) || poi.id.includes(input) || d.name.includes(input)) {
+                            count++;
+                            resultBox.innerHTML += `<div class="px-4 py-3 hover:bg-slate-700 cursor-pointer border-b border-slate-700 last:border-0" onclick="jumpToMap('${tId}', '${poi.id}', ${poi.lat}, ${poi.lng}, '${poi.name}')"><div class="text-xs text-amber-400 mb-0.5">${d.name} · ${poi.id}</div><div class="text-white font-medium">${poi.name}</div></div>`;
+                        }
+                    });
+                });
+                if (count > 0) resultBox.classList.remove('hidden'); else { resultBox.innerHTML = '<div class="px-4 py-3 text-slate-500 text-sm">無符合結果</div>'; resultBox.classList.remove('hidden'); }
+            }
+        }
+
+        // 🌟 執行同步與進入主畫面
+        async function performSyncAndEnter() {
+            const syncSuccess = await fetchSyncState();
+            if (!syncSuccess) console.warn("⚠️ 讀取雲端資料庫失敗，已載入本地暫存資料。");
+
+            const loginScreen = document.getElementById('login-screen');
+            if (loginScreen) {
+                loginScreen.style.opacity = '0';
+                setTimeout(() => loginScreen.style.display = 'none', 500);
+            }
+            
+            const splash = document.getElementById('splash-screen');
+            if (splash) {
+                splash.style.opacity = '0'; 
+                setTimeout(() => splash.style.visibility = 'hidden', 500);
+            }
+            
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+            if (!isStandalone && !localStorage.getItem('pwa_prompt_shown_v2')) {
+                setTimeout(() => {
+                    const prompt = document.getElementById('pwa-prompt');
+                    if (prompt) { prompt.classList.remove('hidden'); setTimeout(() => prompt.classList.remove('translate-y-[-150%]'), 100); }
+                    localStorage.setItem('pwa_prompt_shown_v2', 'true');
+                }, 2000);
+            }
+
+            if(map) map.invalidateSize(); 
+            
+            // 預設載入第一個鄉鎮 (南投市)
+            loadTownship(Object.keys(mapData)[0]);
+        }
+
+        async function checkPassword() {
+            const pwdInput = document.getElementById('pwd-input');
+            const pwdError = document.getElementById('pwd-error');
+            if(!pwdInput) return;
+
+            const inputVal = pwdInput.value;
+            if (inputVal === SYSTEM_PASSWORD) {
+                pwdInput.blur(); window.scrollTo(0, 0);
+                if(pwdError) pwdError.style.opacity = '0';
+                
+                const loginBtn = document.getElementById('btn-login');
+                if (loginBtn) loginBtn.innerHTML = '<i class="ph ph-spinner animate-spin text-xl"></i> 同步雲端進度...';
+                
+                localStorage.setItem('nantou_vacant_system_auth', 'true');
+                
+                await performSyncAndEnter();
+            } else {
+                if (pwdError) pwdError.style.opacity = '1'; pwdInput.value = '';
+            }
+        }
+
+        window.onload = () => {
+            initMap();
+            
+            // 動態生成：單一層級 (13鄉鎮膠囊按鈕)
+            const townshipSelector = document.getElementById('township-selector');
+            if (townshipSelector) {
+                Object.keys(mapData).forEach((id) => {
+                    const btn = document.createElement('div');
+                    btn.dataset.id = id;
+                    btn.className = `township-pill shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow border bg-slate-800/60 border-slate-700 text-slate-400 cursor-pointer hover:bg-slate-700`;
+                    btn.innerText = mapData[id].name;
+                    btn.onclick = () => loadTownship(id);
+                    townshipSelector.appendChild(btn);
+                });
+            }
+
+            const pwdInput = document.getElementById('pwd-input');
+            if(pwdInput) pwdInput.addEventListener('keypress', e => { if (e.key === 'Enter') checkPassword(); });
+            
+            if (localStorage.getItem('nantou_vacant_system_auth') === 'true') {
+                const splashText = document.querySelector('#splash-screen .animate-pulse');
+                if(splashText) splashText.innerText = '自動登入中，同步雲端資料...';
+                
+                const loginScreen = document.getElementById('login-screen');
+                if (loginScreen) loginScreen.style.display = 'none';
+                
+                performSyncAndEnter();
+            } else {
+                setTimeout(() => { const splash = document.getElementById('splash-screen'); if (splash) { splash.style.opacity = '0'; splash.style.visibility = 'hidden'; } }, 2000); 
+            }
+        };
+        
+        function locateUser() {
+            const btnIcon = document.querySelector('#locate-btn i');
+            if(btnIcon) btnIcon.className = "ph ph-spinner animate-spin text-2xl text-amber-400"; 
+            if (!navigator.geolocation) return alert("瀏覽器不支援定位功能！");
+            
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const lat = pos.coords.latitude, lng = pos.coords.longitude;
+                    if (userMarker && map) map.removeLayer(userMarker);
+                    if (map) {
+                        userMarker = L.marker([lat, lng], { icon: L.divIcon({ className: 'custom-user-icon', html: `<div class="relative"><div class="user-pulse"></div><div class="user-location-marker"></div></div>`, iconSize: [16, 16], iconAnchor: [8, 8] }), zIndexOffset: 1000 }).addTo(map);
+                        map.flyTo([lat, lng], 16, { animate: true, duration: 1.5 });
+                    }
+                    if(btnIcon) btnIcon.className = "ph-fill ph-crosshair text-2xl text-amber-400"; 
+                },
+                () => { alert("無法獲取您的位置！請確認已開啟 GPS 與權限。"); if(btnIcon) btnIcon.className = "ph-fill ph-crosshair text-2xl text-amber-400"; },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+    </script>
+</body>
+</html>
