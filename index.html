@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <!-- 關鍵修正：解除防盜連 -->
+    <!-- 關鍵修正：解除 Google 防盜連 -->
     <meta name="referrer" content="no-referrer">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -238,8 +238,8 @@
          JavaScript 詳細設定與核心邏輯 
          ========================================== -->
     <script>
-        // 🚨 這裡必須填寫您最新部署的 GAS 網址！！！
-        const GOOGLE_APP_SCRIPT_URL = "👉請在此貼上您最新部署產生的網址👈"; 
+        // 🚨 自動填入：已更新為您最新部署的 GAS 網址！
+        const GOOGLE_APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyLHvYPz6eJoiWOAXpGL-tFInwel8EnaHUYXPNHR04Z10n_FcI-zxALMfHCRzn5xg-TnA/exec"; 
         
         const SYSTEM_PASSWORD = "54004658";
 
@@ -368,19 +368,24 @@
 
         function createPointIcon(isDone) {
             const iconColor = isDone ? '#64748b' : '#f59e0b';
-            const opacity = isDone ? 0.7 : 1;
+            const bgColor = isDone ? 'rgba(30, 41, 59, 0.95)' : 'rgba(15, 23, 42, 0.95)';
+            const opacity = isDone ? 0.75 : 1;
             return L.divIcon({ 
                 className: 'custom-leaflet-icon', 
-                html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40" style="opacity:${opacity}">
-                        <circle cx="20" cy="20" r="18" fill="rgba(15, 23, 42, 0.9)" stroke="${iconColor}" stroke-width="2"/>
-                        ${opacity === 1 ? `<circle cx="20" cy="20" r="24" fill="none" stroke="${iconColor}" stroke-width="1" opacity="0.4" class="pulse"/>` : ''}
+                html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 50" width="40" height="50" style="opacity:${opacity}; filter: drop-shadow(0px 5px 4px rgba(0,0,0,0.5)); overflow:visible;">
+                        ${opacity === 1 ? `<circle cx="20" cy="20" r="18" fill="none" stroke="${iconColor}" stroke-width="2" opacity="0">
+                            <animate attributeName="r" values="18; 28" dur="1.5s" repeatCount="indefinite"/>
+                            <animate attributeName="opacity" values="0.8; 0" dur="1.5s" repeatCount="indefinite"/>
+                        </circle>` : ''}
+                        <path d="M20 2C10.059 2 2 10.059 2 20c0 13.5 18 28 18 28s18-14.5 18-28c0-9.941-8.059-18-18-18z" fill="${bgColor}" stroke="${iconColor}" stroke-width="2.5"/>
                         <foreignObject x="8" y="8" width="24" height="24">
-                            <div xmlns="http://www.w3.org/1999/xhtml" style="display:flex; justify-content:center; align-items:center; height:100%; color:${iconColor}; font-size:18px;">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="display:flex; justify-content:center; align-items:center; height:100%; color:${iconColor}; font-size:16px;">
                                 <i class="ph-fill ph-house-line"></i>
                             </div>
                         </foreignObject>
                        </svg>`, 
-                iconSize: [40, 40], iconAnchor: [20, 20] 
+                iconSize: [40, 50], 
+                iconAnchor: [20, 50] // ⭐️ 精準對齊底部尖端，解決視覺偏差感
             });
         }
 
@@ -420,7 +425,7 @@
                 });
                 
                 const colorClass = isDone ? 'text-slate-400' : 'text-amber-400';
-                marker.bindTooltip(`<span class="${colorClass} font-bold">${poi.name}${isDone ? ' (已巡檢)' : ''}</span>`, { permanent: true, direction: 'top', className: 'glass-tooltip', offset: [0, -20] });
+                marker.bindTooltip(`<span class="${colorClass} font-bold">${poi.name}${isDone ? ' (已巡檢)' : ''}</span>`, { permanent: true, direction: 'top', className: 'glass-tooltip', offset: [0, -35] }); // ⭐️ Tooltip 往上移避免遮擋圖示
                 activeLayers.push(marker); 
                 bounds.push([poi.lat, poi.lng]);
             });
@@ -622,19 +627,26 @@
             }
         }
 
-        // 🌟 點擊後開啟內建預覽器 Lightbox
+        // 🌟 點擊後開啟內建預覽器 Lightbox (方案 A 強化版)
         function openLightbox(url) {
             const lb = document.getElementById('lightbox');
             const img = document.getElementById('lightbox-img');
             const loading = document.getElementById('lightbox-loading');
 
             lb.classList.remove('hidden');
-            void lb.offsetWidth; // 強制重繪
+            void lb.offsetWidth; 
             lb.classList.remove('opacity-0');
             img.style.opacity = '0';
             img.classList.remove('scale-100');
             img.classList.add('scale-95');
+            
+            // 重置載入畫面
             loading.style.display = 'flex';
+            loading.innerHTML = '<i class="ph ph-spinner animate-spin text-5xl"></i><span class="text-sm font-bold tracking-widest mt-2">載入高畫質原圖...</span>';
+
+            // 方案 A：清洗網址並透過 Weserv 圖片代理服務強制解除 CORS 防盜連
+            const cleanUrl = url.replace('authuser=0&', '');
+            const proxyUrl = `https://images.weserv.nl/?url=${encodeURIComponent(cleanUrl)}&default=${encodeURIComponent(cleanUrl)}`;
 
             img.onload = () => {
                 loading.style.display = 'none';
@@ -642,7 +654,18 @@
                 img.classList.remove('scale-95');
                 img.classList.add('scale-100');
             };
-            img.src = url;
+
+            // 處理載入失敗，給予使用者明確提示
+            img.onerror = () => {
+                if (img.src === proxyUrl) {
+                    // 如果代理服務失敗，退回原網址盲測一次
+                    img.src = cleanUrl;
+                } else {
+                    loading.innerHTML = '<i class="ph-fill ph-warning-circle text-5xl text-red-500"></i><span class="text-sm font-bold text-red-400 mt-2 text-center leading-relaxed">圖片載入失敗<br>遭到瀏覽器安全性阻擋</span>';
+                }
+            };
+
+            img.src = proxyUrl;
         }
 
         // 🌟 關閉內建預覽器 Lightbox
