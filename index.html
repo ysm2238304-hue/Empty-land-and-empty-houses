@@ -588,7 +588,9 @@
             for (let i = 0; i < photos.length; i++) {
                 if (photos[i].uploaded) continue;
                 const base64Data = photos[i].data.split(',')[1];
-                const fileName = `${itemId}_${pointName}_${Date.now()}.jpg`;
+                
+                // 🌟 核心修正：用地點名稱來命名，並在後面加註序號 (i + 1)
+                const fileName = `${pointName}_${i + 1}.jpg`;
 
                 try {
                     if(GOOGLE_APP_SCRIPT_URL.includes("請在此貼上")) throw new Error("尚未設定新網址");
