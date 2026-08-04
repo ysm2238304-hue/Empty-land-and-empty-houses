@@ -94,7 +94,7 @@
         </div>
     </div>
 
-    <!-- 🌟 新增與修正：專屬圖片預覽器 (Lightbox) -->
+    <!-- 🌟 專屬圖片預覽器 (Lightbox) -->
     <div id="lightbox" class="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-md hidden flex-col items-center justify-center opacity-0 p-4" onclick="closeLightbox()">
         <div class="absolute top-[max(1.5rem,env(safe-area-inset-top))] right-4 z-[100] bg-slate-800/80 rounded-full w-10 h-10 flex items-center justify-center cursor-pointer hover:bg-slate-700 text-white border border-slate-600 shadow-xl" onclick="closeLightbox(); event.stopPropagation();">
             <i class="ph-bold ph-x text-xl"></i>
@@ -223,6 +223,7 @@
         
         const SYSTEM_PASSWORD = "54004658";
 
+        // 🌟 KML 照片網址資料庫 (完整版)
         const mapData = {
             "nantou": {
                 name: "南投市",
@@ -303,6 +304,7 @@
             }
         };
 
+        // --- 狀態保存 ---
         let inspectionState = JSON.parse(localStorage.getItem('nantou_vacant_inspection')) || {};
         let inspectionPhotos = JSON.parse(localStorage.getItem('nantou_vacant_photos_v1')) || {}; 
         
@@ -313,7 +315,7 @@
             try {
                 const res = await fetch(GOOGLE_APP_SCRIPT_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 🔴 繞過 CORS 預檢 (最終修復)
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({ action: 'get_status' })
                 });
                 if (!res.ok) throw new Error("HTTP 狀態碼異常：" + res.status);
@@ -340,6 +342,7 @@
             else renderListView(); 
         }
 
+        // --- 地圖核心 ---
         let map;
         let activeLayers = [];
         let currentBounds = null;
@@ -465,7 +468,7 @@
                 if(GOOGLE_APP_SCRIPT_URL.includes("請在此貼上")) throw new Error("尚未設定新的 GAS 網址");
                 const response = await fetch(GOOGLE_APP_SCRIPT_URL, {
                     method: 'POST', 
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 🔴 繞過 CORS 預檢 (最終修復)
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({ action: 'set_status', itemId: currentItemId, isDone: newState })
                 });
                 const result = await response.json();
@@ -579,7 +582,7 @@
 
                     const response = await fetch(GOOGLE_APP_SCRIPT_URL, {
                         method: 'POST', 
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 🔴 繞過 CORS 預檢 (最終修復)
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                         body: JSON.stringify({ 
                             action: 'upload_photo', 
                             township: townshipName, 
@@ -592,12 +595,30 @@
                             unit: unit          
                         })
                     });
-                    const result = await response.json();
+
+                    // ⚠️ 全新修正：先讀取純文字，避免遇到 HTML 錯誤頁面導致 JSON 解析崩潰！
+                    const rawResponse = await response.text();
+                    let result;
+                    try {
+                        result = JSON.parse(rawResponse);
+                    } catch (jsonError) {
+                        // 如果後端回傳了亂碼或 HTML 網頁，這裡會抓到，並顯示給使用者看
+                        console.error("後端回傳的不是標準 JSON，可能是權限或試算表鎖定:", rawResponse);
+                        alert(`⚠️ 後端回傳了非預期內容，可能是試算表被鎖定或權限問題！\n\n回傳內容(前200字)：\n${rawResponse.substring(0, 200)}...`);
+                        continue; // 跳過這張，繼續下一張
+                    }
+
                     if (result.status === "success") { 
                         photos[i].uploaded = true; 
                         successCount++; 
+                    } else {
+                        // 若 status 是 error，顯示後端給的真正錯誤訊息
+                        alert(`單張上傳失敗！後端原因：${result.message || "未知錯誤"}`);
                     }
-                } catch (err) { console.error("上傳失敗", err); }
+                } catch (err) { 
+                    console.error("網路請求失敗:", err); 
+                    alert(`網路請求發生錯誤：${err.message}`);
+                }
             }
 
             inspectionPhotos[currentItemId] = photos.filter(p => !p.uploaded);
@@ -609,7 +630,7 @@
             if(successCount === pendingPhotos.length) {
                 alert("✅ 照片已成功上傳，自動建立了「鄉鎮 ➔ 地號」資料夾，並已填入巡查表！");
             } else {
-                alert(`⚠️ 上傳完畢。成功: ${successCount} 張，失敗: ${pendingPhotos.length - successCount} 張。`);
+                alert(`⚠️ 上傳完畢。成功: ${successCount} 張，失敗: ${pendingPhotos.length - successCount} 張。\n如果您在雲端硬碟有看到照片，請將上方 "後端回傳非預期內容" 的訊息截圖給我。`);
             }
         }
 
