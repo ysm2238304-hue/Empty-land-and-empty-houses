@@ -830,4 +830,102 @@
             map.flyTo([lat, lng], 16, { animate: true, duration: 1.2 });
             const descHTML = `
                 <div class="flex flex-col gap-2">
-                    <div class="text-sm flex items-center gap-2"><span class="bg-slate-700 text-white px-2 py-0.5 rounded
+                    <div class="text-sm flex items-center gap-2"><span class="bg-slate-700 text-white px-2 py-0.5 rounded text-xs font-bold w-[70px] text-center">主管機關</span> <span class="text-white">${poi.agency}</span></div>
+                    <div class="text-sm flex items-center gap-2 mt-1"><span class="bg-slate-700 text-white px-2 py-0.5 rounded text-xs font-bold w-[70px] text-center">巡查單位</span> <span class="text-slate-200">${poi.unit}</span></div>
+                </div>
+            `;
+            setTimeout(() => { showBottomSheet(title, descHTML, lat, lng, itemId, tId); }, 1000);
+        }
+
+        function handleSearch() {
+            const input = document.getElementById('search-input').value.trim();
+            const resultBox = document.getElementById('search-results');
+            if(!resultBox) return;
+
+            if (input.length === 0) {
+                resultBox.classList.add('hidden');
+                if (isListView) renderListView(); return;
+            }
+
+            if (isListView) { renderListView(input); } 
+            else {
+                resultBox.innerHTML = '';
+                let count = 0;
+                Object.keys(mapData).forEach(tId => {
+                    const d = mapData[tId];
+                    if (!d || !d.points) return;
+                    d.points.forEach(poi => {
+                        if (poi.name.includes(input) || poi.id.includes(input) || d.name.includes(input)) {
+                            count++;
+                            resultBox.innerHTML += `<div class="px-4 py-3 hover:bg-slate-700 cursor-pointer border-b border-slate-700 last:border-0" onclick="jumpToMap('${tId}', '${poi.id}', ${poi.lat}, ${poi.lng}, '${poi.name}')"><div class="text-xs text-amber-400 mb-0.5">${d.name} · ${poi.id}</div><div class="text-white font-medium">${poi.name}</div></div>`;
+                        }
+                    });
+                });
+                if (count > 0) resultBox.classList.remove('hidden'); else { resultBox.innerHTML = '<div class="px-4 py-3 text-slate-500 text-sm">無符合結果</div>'; resultBox.classList.remove('hidden'); }
+            }
+        }
+
+        async function performSyncAndEnter() {
+            await fetchSyncState();
+            document.getElementById('login-screen').style.display = 'none';
+            const splash = document.getElementById('splash-screen');
+            splash.style.opacity = '0'; setTimeout(() => splash.style.visibility = 'hidden', 500);
+            if(map) map.invalidateSize(); 
+            loadTownship(Object.keys(mapData)[0]); // 預設載入第一個鄉鎮(南投市)
+        }
+
+        async function checkPassword() {
+            const pwdInput = document.getElementById('pwd-input').value;
+            if (pwdInput === SYSTEM_PASSWORD) {
+                document.getElementById('pwd-error').style.opacity = '0';
+                document.getElementById('btn-login').innerHTML = '<i class="ph ph-spinner animate-spin text-xl"></i> 同步雲端進度...';
+                localStorage.setItem('nantou_vacant_system_auth', 'true');
+                await performSyncAndEnter();
+            } else {
+                document.getElementById('pwd-error').style.opacity = '1'; document.getElementById('pwd-input').value = '';
+            }
+        }
+
+        window.onload = () => {
+            initMap();
+            const townshipSelector = document.getElementById('township-selector');
+            Object.keys(mapData).forEach((id) => {
+                const btn = document.createElement('div');
+                btn.dataset.id = id;
+                btn.className = `township-pill shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow border bg-slate-800/60 border-slate-700 text-slate-400 cursor-pointer hover:bg-slate-700`;
+                btn.innerText = mapData[id].name;
+                btn.onclick = () => loadTownship(id);
+                townshipSelector.appendChild(btn);
+            });
+
+            if (localStorage.getItem('nantou_vacant_system_auth') === 'true') {
+                document.querySelector('#splash-screen .animate-pulse').innerText = '自動登入中，同步雲端資料...';
+                document.getElementById('login-screen').style.display = 'none';
+                performSyncAndEnter();
+            } else {
+                setTimeout(() => { const splash = document.getElementById('splash-screen'); if (splash) { splash.style.opacity = '0'; splash.style.visibility = 'hidden'; } }, 2000); 
+            }
+        };
+        
+        function locateUser() {
+            const btnIcon = document.querySelector('#locate-btn i');
+            if(btnIcon) btnIcon.className = "ph ph-spinner animate-spin text-2xl text-amber-400"; 
+            if (!navigator.geolocation) return alert("瀏覽器不支援定位功能！");
+            
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const lat = pos.coords.latitude, lng = pos.coords.longitude;
+                    if (userMarker && map) map.removeLayer(userMarker);
+                    if (map) {
+                        userMarker = L.marker([lat, lng], { icon: L.divIcon({ className: 'custom-user-icon', html: `<div class="relative"><div class="user-pulse"></div><div class="user-location-marker"></div></div>`, iconSize: [16, 16], iconAnchor: [8, 8] }), zIndexOffset: 1000 }).addTo(map);
+                        map.flyTo([lat, lng], 16, { animate: true, duration: 1.5 });
+                    }
+                    if(btnIcon) btnIcon.className = "ph-fill ph-crosshair text-2xl text-amber-400"; 
+                },
+                () => { alert("無法獲取您的位置！請確認已開啟 GPS 與權限。"); if(btnIcon) btnIcon.className = "ph-fill ph-crosshair text-2xl text-amber-400"; },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+    </script>
+</body>
+</html>
