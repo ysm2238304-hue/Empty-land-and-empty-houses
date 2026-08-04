@@ -94,9 +94,8 @@
         </div>
     </div>
 
-    <!-- 🌟 新增與修正：專屬圖片預覽器 (Lightbox) - 解決手機遮擋與破圖問題 🌟 -->
+    <!-- 🌟 新增與修正：專屬圖片預覽器 (Lightbox) -->
     <div id="lightbox" class="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-md hidden flex-col items-center justify-center opacity-0 p-4" onclick="closeLightbox()">
-        <!-- 修正 1：加入 top-[max(1.5rem,env(safe-area-inset-top))] 避開手機瀏海，並將 z-index 提高到 100 保證不被圖片蓋住 -->
         <div class="absolute top-[max(1.5rem,env(safe-area-inset-top))] right-4 z-[100] bg-slate-800/80 rounded-full w-10 h-10 flex items-center justify-center cursor-pointer hover:bg-slate-700 text-white border border-slate-600 shadow-xl" onclick="closeLightbox(); event.stopPropagation();">
             <i class="ph-bold ph-x text-xl"></i>
         </div>
@@ -104,7 +103,6 @@
             <i class="ph ph-spinner animate-spin text-5xl"></i>
             <span class="text-sm font-bold tracking-widest mt-2">載入高畫質原圖...</span>
         </div>
-        <!-- 修正 2：改用 max-h-[85dvh] 適應手機動態網址列，並加入 cursor-pointer，讓「點擊圖片本身」也能直接關閉！ -->
         <img id="lightbox-img" src="" class="max-w-full max-h-[85dvh] object-contain rounded-xl shadow-2xl relative z-10 scale-95 opacity-0 cursor-pointer" onclick="closeLightbox(); event.stopPropagation();">
     </div>
 
@@ -118,13 +116,9 @@
         <button onclick="hidePwaPrompt()" class="text-white opacity-70 hover:opacity-100 cursor-pointer"><i class="ph ph-x text-lg"></i></button>
     </div>
 
-    <!-- 2. 主畫面 (地圖容器) -->
     <div id="map" class="absolute inset-0 z-0"></div>
 
-    <!-- 3. UI 覆蓋層 -->
     <div id="ui-layer" class="absolute inset-0 z-10 pointer-events-none">
-        
-        <!-- 頂部選單 -->
         <div class="pointer-events-auto absolute top-0 left-0 w-full safe-top-padding px-4 pb-3 bg-gradient-to-b from-slate-950 via-slate-950/95 to-transparent z-[50]">
             <div class="flex items-center justify-between mb-3 mt-2">
                 <h2 class="text-lg font-bold flex items-center gap-2 text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">
@@ -141,17 +135,14 @@
                 </div>
             </div>
 
-            <!-- 全局搜尋列 -->
             <div class="relative w-full mb-3">
                 <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg"></i>
                 <input type="text" id="search-input" placeholder="搜尋建檔編號或地點名稱..." class="w-full bg-slate-800/80 border border-slate-700 rounded-full pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-amber-400 transition-colors" oninput="handleSearch()">
                 <div id="search-results" class="absolute top-full left-0 right-0 mt-1 bg-slate-800 rounded-xl shadow-2xl z-[60] hidden max-h-48 overflow-y-auto border border-slate-700"></div>
             </div>
             
-            <!-- 單一階層：鄉鎮市橫向浮動按鈕 -->
             <div class="flex gap-2 overflow-x-auto no-scrollbar py-1 mb-2 w-full touch-pan-x" style="-webkit-overflow-scrolling: touch;" id="township-selector"></div>
 
-            <!-- 戰情進度儀表板 -->
             <div class="w-full px-1">
                 <div class="flex justify-between text-[11px] text-slate-400 font-bold mb-1">
                     <span id="progress-text">🏆 總體達成率：0/0 點位</span>
@@ -163,7 +154,6 @@
             </div>
         </div>
 
-        <!-- 4. 清單模式 (List View) -->
         <div id="list-view" class="pointer-events-auto absolute inset-0 z-[45] bg-slate-950 overflow-y-auto hidden pt-[200px] pb-10 px-4" style="touch-action: pan-y;">
             <h3 id="list-main-title" class="text-lg font-bold text-amber-400 mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
                 <i class="ph-fill ph-list-bullets"></i> 巡檢清單
@@ -171,9 +161,7 @@
             <div id="list-container" class="flex flex-col gap-4"></div>
         </div>
 
-        <!-- 5. 底部資訊與多照片面板 -->
         <div id="bottom-sheet" class="pointer-events-auto absolute bottom-0 left-0 bottom-sheet hidden-sheet glass-panel w-full rounded-t-3xl p-5 pb-8 shadow-[0_-20px_50px_rgba(0,0,0,0.8)] max-h-[85vh] overflow-y-auto flex flex-col z-[60]" style="touch-action: pan-y;">
-            
             <div class="flex justify-between items-center mb-4">
                 <div class="w-8 h-1.5"></div>
                 <div class="w-12 h-1.5 bg-slate-600 rounded-full cursor-pointer" onclick="hideBottomSheet()"></div>
@@ -195,17 +183,13 @@
                 
                 <div class="text-sm text-slate-300 mb-4 w-full bg-slate-900/50 p-3 rounded-xl border border-slate-700/50" id="sheet-desc">詳細資訊</div>
                 
-                <!-- 🌟 修正：原地圖點位參考照片 (改為條列式按鈕) -->
                 <div class="mb-4 bg-slate-800/80 p-4 rounded-xl border border-slate-600/80 hidden" id="ref-photos-section">
                     <h4 class="text-sm font-bold text-slate-200 flex items-center gap-2 mb-3">
                         <i class="ph-fill ph-image text-emerald-400 text-lg"></i> 原地圖點位參考照片
                     </h4>
-                    <div id="ref-photo-grid" class="flex flex-col gap-2">
-                        <!-- 動態插入原圖連結按鈕 -->
-                    </div>
+                    <div id="ref-photo-grid" class="flex flex-col gap-2"></div>
                 </div>
 
-                <!-- 照片上傳區 -->
                 <div class="mb-5 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
                     <div class="flex justify-between items-center mb-3">
                         <h4 class="text-sm font-bold text-slate-300 flex items-center gap-2">
@@ -229,22 +213,16 @@
             </div>
         </div>
 
-        <!-- 6. 實時定位按鈕 -->
         <button id="locate-btn" class="pointer-events-auto absolute bottom-8 right-4 z-[40] glass p-3 rounded-full text-amber-400 hover:text-white shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all active:scale-95 cursor-pointer" onclick="locateUser()">
             <i class="ph-fill ph-crosshair text-2xl"></i>
         </button>
     </div>
 
-    <!-- ==========================================
-         JavaScript 詳細設定與核心邏輯 
-         ========================================== -->
     <script>
-        // 🚨 自動填入：已更新為您最新部署的 GAS 網址！
         const GOOGLE_APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyLHvYPz6eJoiWOAXpGL-tFInwel8EnaHUYXPNHR04Z10n_FcI-zxALMfHCRzn5xg-TnA/exec"; 
         
         const SYSTEM_PASSWORD = "54004658";
 
-        // 🌟 KML 照片網址資料庫
         const mapData = {
             "nantou": {
                 name: "南投市",
@@ -325,7 +303,6 @@
             }
         };
 
-        // --- 狀態保存 ---
         let inspectionState = JSON.parse(localStorage.getItem('nantou_vacant_inspection')) || {};
         let inspectionPhotos = JSON.parse(localStorage.getItem('nantou_vacant_photos_v1')) || {}; 
         
@@ -336,7 +313,7 @@
             try {
                 const res = await fetch(GOOGLE_APP_SCRIPT_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json;charset=utf-8' }, // 🔴 改為 JSON
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 🔴 繞過 CORS 預檢 (最終修復)
                     body: JSON.stringify({ action: 'get_status' })
                 });
                 if (!res.ok) throw new Error("HTTP 狀態碼異常：" + res.status);
@@ -350,7 +327,7 @@
                 }
                 return false;
             } catch(e) { 
-                console.error("❌ 同步雲端狀態失敗:", e); // 🔴 增加錯誤日誌
+                console.error("❌ 同步雲端狀態失敗:", e);
                 return false; 
             }
         }
@@ -363,7 +340,6 @@
             else renderListView(); 
         }
 
-        // --- 地圖核心 ---
         let map;
         let activeLayers = [];
         let currentBounds = null;
@@ -389,7 +365,7 @@
                         </foreignObject>
                        </svg>`, 
                 iconSize: [40, 50], 
-                iconAnchor: [20, 50] // ⭐️ 精準對齊底部尖端，解決視覺偏差感
+                iconAnchor: [20, 50]
             });
         }
 
@@ -429,7 +405,7 @@
                 });
                 
                 const colorClass = isDone ? 'text-slate-400' : 'text-amber-400';
-                marker.bindTooltip(`<span class="${colorClass} font-bold">${poi.name}${isDone ? ' (已巡檢)' : ''}</span>`, { permanent: true, direction: 'top', className: 'glass-tooltip', offset: [0, -35] }); // ⭐️ Tooltip 往上移避免遮擋圖示
+                marker.bindTooltip(`<span class="${colorClass} font-bold">${poi.name}${isDone ? ' (已巡檢)' : ''}</span>`, { permanent: true, direction: 'top', className: 'glass-tooltip', offset: [0, -35] });
                 activeLayers.push(marker); 
                 bounds.push([poi.lat, poi.lng]);
             });
@@ -488,7 +464,8 @@
             try {
                 if(GOOGLE_APP_SCRIPT_URL.includes("請在此貼上")) throw new Error("尚未設定新的 GAS 網址");
                 const response = await fetch(GOOGLE_APP_SCRIPT_URL, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json;charset=utf-8' }, // 🔴 改為 JSON
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 🔴 繞過 CORS 預檢 (最終修復)
                     body: JSON.stringify({ action: 'set_status', itemId: currentItemId, isDone: newState })
                 });
                 const result = await response.json();
@@ -504,7 +481,10 @@
                         markText.innerText = "未巡檢";
                     }
                 }
-            } catch(e) { alert("⚠️ 雲端同步失敗！"); } 
+            } catch(e) { 
+                console.error("同步失敗錯誤:", e);
+                alert("⚠️ 雲端同步失敗！詳細錯誤：" + e.message); 
+            } 
             finally { if(btn) btn.disabled = false; }
         }
 
@@ -592,14 +572,14 @@
                 if (photos[i].uploaded) continue;
                 const base64Data = photos[i].data.split(',')[1];
                 
-                // 🌟 核心修正：用地點名稱來命名，並在後面加註序號 (i + 1)
                 const fileName = `${pointName}_${i + 1}.jpg`;
 
                 try {
                     if(GOOGLE_APP_SCRIPT_URL.includes("請在此貼上")) throw new Error("尚未設定新網址");
 
                     const response = await fetch(GOOGLE_APP_SCRIPT_URL, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json;charset=utf-8' }, // 🔴 改為 JSON
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 🔴 繞過 CORS 預檢 (最終修復)
                         body: JSON.stringify({ 
                             action: 'upload_photo', 
                             township: townshipName, 
@@ -633,7 +613,6 @@
             }
         }
 
-        // 🌟 點擊後開啟內建預覽器 Lightbox (方案 A 強化版)
         function openLightbox(url) {
             const lb = document.getElementById('lightbox');
             const img = document.getElementById('lightbox-img');
@@ -646,11 +625,9 @@
             img.classList.remove('scale-100');
             img.classList.add('scale-95');
             
-            // 重置載入畫面
             loading.style.display = 'flex';
             loading.innerHTML = '<i class="ph ph-spinner animate-spin text-5xl"></i><span class="text-sm font-bold tracking-widest mt-2">載入高畫質原圖...</span>';
 
-            // 方案 A：清洗網址並透過 Weserv 圖片代理服務強制解除 CORS 防盜連
             const cleanUrl = url.replace('authuser=0&', '');
             const proxyUrl = `https://images.weserv.nl/?url=${encodeURIComponent(cleanUrl)}&default=${encodeURIComponent(cleanUrl)}`;
 
@@ -661,10 +638,8 @@
                 img.classList.add('scale-100');
             };
 
-            // 處理載入失敗，給予使用者明確提示
             img.onerror = () => {
                 if (img.src === proxyUrl) {
-                    // 如果代理服務失敗，退回原網址盲測一次
                     img.src = cleanUrl;
                 } else {
                     loading.innerHTML = '<i class="ph-fill ph-warning-circle text-5xl text-red-500"></i><span class="text-sm font-bold text-red-400 mt-2 text-center leading-relaxed">圖片載入失敗<br>遭到瀏覽器安全性阻擋</span>';
@@ -674,7 +649,6 @@
             img.src = proxyUrl;
         }
 
-        // 🌟 關閉內建預覽器 Lightbox
         function closeLightbox() {
             const lb = document.getElementById('lightbox');
             lb.classList.add('opacity-0');
@@ -684,7 +658,6 @@
             }, 300);
         }
 
-        // 🌟 顯示 KML 內附的原地圖照片！
         function showBottomSheet(title, desc, lat, lng, itemId, tId) {
             currentItemId = itemId;
             
@@ -706,7 +679,6 @@
 
             renderPhotos();
             
-            // 🌟 將原 KML 照片按鈕綁定到新的內建 Lightbox 預覽器
             const refSection = document.getElementById('ref-photos-section');
             const refGrid = document.getElementById('ref-photo-grid');
             const poi = mapData[tId].points.find(p => p.id === itemId);
@@ -871,7 +843,7 @@
             const splash = document.getElementById('splash-screen');
             splash.style.opacity = '0'; setTimeout(() => splash.style.visibility = 'hidden', 500);
             if(map) map.invalidateSize(); 
-            loadTownship(Object.keys(mapData)[0]); // 預設載入第一個鄉鎮(南投市)
+            loadTownship(Object.keys(mapData)[0]);
         }
 
         async function checkPassword() {
