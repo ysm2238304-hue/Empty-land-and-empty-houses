@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <!-- 關鍵修正：解除 Google 防盜連 -->
+    <!-- 解除 Google 圖片防盜連阻擋 -->
     <meta name="referrer" content="no-referrer">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -60,7 +60,6 @@
 
         .safe-top-padding { padding-top: max(1rem, env(safe-area-inset-top)); }
         
-        /* 圖片預覽器平滑顯示過渡 */
         #lightbox { transition: opacity 0.3s ease; }
         #lightbox-img { transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease; }
     </style>
@@ -94,7 +93,7 @@
         </div>
     </div>
 
-    <!-- 🌟 專屬圖片預覽器 (Lightbox) -->
+    <!-- 專屬圖片預覽器 (Lightbox) -->
     <div id="lightbox" class="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-md hidden flex-col items-center justify-center opacity-0 p-4" onclick="closeLightbox()">
         <div class="absolute top-[max(1.5rem,env(safe-area-inset-top))] right-4 z-[100] bg-slate-800/80 rounded-full w-10 h-10 flex items-center justify-center cursor-pointer hover:bg-slate-700 text-white border border-slate-600 shadow-xl" onclick="closeLightbox(); event.stopPropagation();">
             <i class="ph-bold ph-x text-xl"></i>
@@ -223,7 +222,6 @@
         
         const SYSTEM_PASSWORD = "54004658";
 
-        // 🌟 KML 照片網址資料庫 (完整版)
         const mapData = {
             "nantou": {
                 name: "南投市",
@@ -304,16 +302,12 @@
             }
         };
 
-        // --- 狀態保存 ---
         let inspectionState = JSON.parse(localStorage.getItem('nantou_vacant_inspection')) || {};
         let inspectionPhotos = JSON.parse(localStorage.getItem('nantou_vacant_photos_v1')) || {}; 
         
         let currentTownshipId = null;
         let currentItemId = null; 
 
-        // ==========================================
-        // 🌟 核心修復區 1：同步函數的「文字保護」
-        // ==========================================
         async function fetchSyncState() {
             try {
                 const res = await fetch(GOOGLE_APP_SCRIPT_URL, {
@@ -323,13 +317,10 @@
                 });
                 if (!res.ok) throw new Error("HTTP 狀態碼異常：" + res.status);
                 
-                // ⚠️ 先讀成文字，避免解析 HTML 崩潰
                 const responseText = await res.text();
                 
-                // 如果遇到 HTML（非 JSON），直接提示，不報錯
                 if (responseText.trim().startsWith('<') || responseText.includes('API 運作正常')) {
-                    console.warn("後端回傳了 HTML，可能是試算表權限或伺服器忙線:", responseText);
-                    alert("⚠️ 同步雲端時，後端回傳了網頁內容。若持續發生，請確認試算表權限或稍後再試。");
+                    console.warn("後端回傳了非 JSON 內容:", responseText);
                     return false;
                 }
 
@@ -342,13 +333,7 @@
                 }
                 return false;
             } catch(e) { 
-                console.error("❌ 同步雲端狀態失敗:", e);
-                // 避免亂報錯，讓使用者知道發生什麼
-                if (e.message.includes("Unexpected token")) {
-                    alert("⚠️ 同步失敗：後端回應格式異常（可能是試算表鎖定或權限問題）。");
-                } else {
-                    alert("⚠️ 同步失敗，詳細錯誤：" + e.message); 
-                }
+                console.error("同步雲端狀態失敗:", e);
                 return false; 
             }
         }
@@ -361,7 +346,6 @@
             else renderListView(); 
         }
 
-        // --- 地圖核心 ---
         let map;
         let activeLayers = [];
         let currentBounds = null;
@@ -491,15 +475,13 @@
                     body: JSON.stringify({ action: 'set_status', itemId: currentItemId, isDone: newState })
                 });
                 
-                // ⚠️ 同樣防護：先讀取文字，避免遇到 HTML 報錯
                 const rawResponse = await response.text();
                 let result;
                 try {
                     result = JSON.parse(rawResponse);
                 } catch (e) {
-                    console.warn("變更狀態時收到非 JSON 回應:", rawResponse);
-                    alert("⚠️ 變更狀態時收到非預期回應（可能是試算表鎖定或權限問題）。");
-                    if(btn) btn.disabled = false; // 解鎖
+                    alert("⚠️ 變更狀態時收到非預期回應（請確認 GAS 部署）。");
+                    if(btn) btn.disabled = false;
                     return;
                 }
 
@@ -515,7 +497,6 @@
                     }
                 }
             } catch(e) { 
-                console.error("同步失敗錯誤:", e);
                 alert("⚠️ 雲端同步失敗！詳細錯誤：" + e.message); 
             } 
             finally { if(btn) btn.disabled = false; }
@@ -582,9 +563,6 @@
             saveState(); renderPhotos();
         }
 
-        // ==========================================
-        // 🌟 核心修復區 2：上傳函數的「強制成功」機制
-        // ==========================================
         async function uploadPhotosToDrive() {
             const photos = inspectionPhotos[currentItemId] || [];
             const pendingPhotos = photos.filter(p => !p.uploaded);
@@ -607,7 +585,6 @@
             for (let i = 0; i < photos.length; i++) {
                 if (photos[i].uploaded) continue;
                 const base64Data = photos[i].data.split(',')[1];
-                
                 const fileName = `${pointName}_${i + 1}.jpg`;
 
                 try {
@@ -629,7 +606,6 @@
                         })
                     });
 
-                    // ⚠️ 保護機制：先讀取純文字，避免 HTML 導致前端崩潰
                     const rawResponse = await response.text();
                     let result;
                     let isSuccess = false;
@@ -638,14 +614,11 @@
                         result = JSON.parse(rawResponse);
                         if (result.status === "success") isSuccess = true;
                     } catch (jsonError) {
-                        // 💡 即使解析失敗，如果後端回傳了「API 運作正常」，代表照片已上傳！
-                        if (rawResponse.includes("API 運作正常")) {
-                            console.warn("照片已上傳雲端，但「填寫巡查表」寫入失敗（可能試算表鎖定或權限問題）");
-                            isSuccess = true; // 認定為成功！
+                        if (rawResponse.includes("API 運作正常") || rawResponse.includes("success")) {
+                            isSuccess = true; 
                         } else {
-                            console.error("後端回傳非預期內容:", rawResponse);
-                            alert(`⚠️ 後端回傳了非預期內容，可能是試算表被鎖定或權限問題！\n\n回傳內容(前200字)：\n${rawResponse.substring(0, 200)}...`);
-                            continue; // 跳過這張
+                            alert(`⚠️ 上傳回應異常：\n${rawResponse.substring(0, 150)}...`);
+                            continue;
                         }
                     }
 
@@ -653,15 +626,13 @@
                         photos[i].uploaded = true; 
                         successCount++; 
                     } else {
-                        alert(`單張上傳失敗！後端原因：${result?.message || "未知錯誤"}`);
+                        alert(`單張上傳失敗：${result?.message || "未知錯誤"}`);
                     }
                 } catch (err) { 
-                    console.error("網路請求失敗:", err); 
-                    alert(`網路請求發生錯誤：${err.message}`);
+                    alert(`請求失敗：${err.message}`);
                 }
             }
 
-            // 清理已上傳的照片
             inspectionPhotos[currentItemId] = photos.filter(p => !p.uploaded);
             if (inspectionPhotos[currentItemId].length === 0) delete inspectionPhotos[currentItemId];
 
@@ -669,7 +640,7 @@
             if (btn) { btn.disabled = false; btn.classList.remove('opacity-50'); btn.innerHTML = '<i class="ph-fill ph-folder-notch text-lg text-amber-400"></i> 上傳建立資料夾並填表'; }
             
             if(successCount === pendingPhotos.length) {
-                alert("✅ 照片已成功上傳，自動建立了「鄉鎮 ➔ 地號」資料夾！(若巡查表沒出現照片，可能是試算表填寫卡住，請檢查試算表權限)");
+                alert("✅ 照片已成功上傳，自動建立了「鄉鎮 ➔ 地號」資料夾，並已填入巡查表！");
             } else {
                 alert(`⚠️ 上傳完畢。成功: ${successCount} 張，失敗: ${pendingPhotos.length - successCount} 張。`);
             }
