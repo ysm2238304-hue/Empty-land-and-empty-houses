@@ -649,8 +649,8 @@
             finally { if(btn) btn.disabled = false; }
         }
 
-        // 極速圖片壓縮與浮水印：改用 URL.createObjectURL 免除原圖 Base64 轉換延遲與記憶體暴增
-        function compressImageAsync(file, meta = {}, maxWidth = 1080, quality = 0.68) {
+        // 極速圖片壓縮：改用 URL.createObjectURL 免除原圖 Base64 轉換延遲與記憶體暴增，保留純淨相片
+        function compressImageAsync(file, maxWidth = 1080, quality = 0.68) {
             return new Promise((resolve, reject) => {
                 const objectUrl = URL.createObjectURL(file);
                 const img = new Image();
@@ -672,20 +672,6 @@
                         canvas.height = h;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, w, h);
-
-                        // 底部專業巡檢浮水印（地號名稱 + 日期時間）
-                        const now = new Date();
-                        const timeStr = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-                        const tagText = `${meta.name || ''}  |  ${timeStr}`;
-                        
-                        const barHeight = Math.max(26, Math.round(h * 0.045));
-                        ctx.fillStyle = "rgba(15, 23, 42, 0.75)";
-                        ctx.fillRect(0, h - barHeight, w, barHeight);
-                        
-                        ctx.fillStyle = "#f8fafc";
-                        ctx.font = `bold ${Math.round(barHeight * 0.52)}px 'Noto Sans TC', sans-serif`;
-                        ctx.textBaseline = "middle";
-                        ctx.fillText(tagText, 12, h - (barHeight / 2));
 
                         resolve(canvas.toDataURL('image/jpeg', quality));
                     } catch (err) {
@@ -709,16 +695,13 @@
             const grid = document.getElementById('photo-preview-grid');
             if(grid) grid.innerHTML += `<div class="col-span-3 text-center text-amber-400 text-sm py-2 font-bold animate-pulse" id="loading-txt"><i class="ph ph-spinner animate-spin"></i> 照片壓縮處理中 (0/${files.length})...</div>`;
 
-            const currentPointName = document.getElementById('sheet-title')?.innerText?.trim() || '';
-            const meta = { name: currentPointName, id: targetItemId };
-
             const fileList = Array.from(files);
             let doneCount = 0;
 
             // 前端壓縮可並行加速，瞬間完成預覽
             const compressedList = await Promise.all(fileList.map(async (file) => {
                 try {
-                    const dataUrl = await compressImageAsync(file, meta, 1080, 0.68);
+                    const dataUrl = await compressImageAsync(file, 1080, 0.68);
                     doneCount++;
                     const loadingTxt = document.getElementById('loading-txt');
                     if(loadingTxt) loadingTxt.innerHTML = `<i class="ph ph-spinner animate-spin"></i> 照片壓縮處理中 (${doneCount}/${fileList.length})...`;
