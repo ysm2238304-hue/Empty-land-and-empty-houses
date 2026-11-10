@@ -174,8 +174,24 @@
                     <span id="progress-text">🏆 總體達成率：0/0 點位</span>
                     <span id="progress-percent" class="text-amber-400">0%</span>
                 </div>
-                <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden mb-2">
                     <div id="progress-bar" class="bg-gradient-to-r from-amber-400 to-orange-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+                
+                <!-- 直覺效率：未巡檢快速過濾器 -->
+                <div class="flex items-center justify-between pt-1 border-t border-slate-800/80">
+                    <div class="text-[11px] text-slate-400 flex items-center gap-1 font-medium">
+                        <i class="ph-fill ph-funnel text-amber-400"></i>
+                        <span>地圖圖釘：</span>
+                    </div>
+                    <div class="flex gap-1.5">
+                        <button id="filter-all-btn" onclick="setPointFilter(false)" class="px-3 py-1 rounded-full text-xs font-bold transition-all bg-amber-500/20 text-amber-300 border border-amber-500/40 cursor-pointer shadow-sm">
+                            顯示全部
+                        </button>
+                        <button id="filter-pending-btn" onclick="setPointFilter(true)" class="px-3 py-1 rounded-full text-xs font-bold transition-all bg-slate-800 text-slate-400 border border-slate-700 cursor-pointer hover:bg-slate-700">
+                            ⚡ 只看未巡檢
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -207,6 +223,12 @@
                     </button>
                 </div>
                 
+                <!-- 置頂秒按導航（出發最快） -->
+                <button id="nav-btn-top" class="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 cursor-pointer mb-3">
+                    <i class="ph-fill ph-navigation-arrow text-xl"></i>
+                    <span>立即開啟 Google 導航</span>
+                </button>
+
                 <div class="text-sm text-slate-300 mb-4 w-full bg-slate-900/50 p-3 rounded-xl border border-slate-700/50" id="sheet-desc">詳細資訊</div>
                 
                 <div class="mb-4 bg-slate-800/80 p-4 rounded-xl border border-slate-600/80 hidden" id="ref-photos-section">
@@ -444,6 +466,24 @@
             });
         }
 
+        let filterOnlyPending = false;
+
+        function setPointFilter(onlyPending) {
+            filterOnlyPending = onlyPending;
+            const btnAll = document.getElementById('filter-all-btn');
+            const btnPending = document.getElementById('filter-pending-btn');
+            if (btnAll && btnPending) {
+                if (filterOnlyPending) {
+                    btnAll.className = 'px-3 py-1 rounded-full text-xs font-bold transition-all bg-slate-800 text-slate-400 border border-slate-700 cursor-pointer hover:bg-slate-700';
+                    btnPending.className = 'px-3 py-1 rounded-full text-xs font-bold transition-all bg-amber-500/20 text-amber-300 border border-amber-500/40 cursor-pointer shadow-sm';
+                } else {
+                    btnAll.className = 'px-3 py-1 rounded-full text-xs font-bold transition-all bg-amber-500/20 text-amber-300 border border-amber-500/40 cursor-pointer shadow-sm';
+                    btnPending.className = 'px-3 py-1 rounded-full text-xs font-bold transition-all bg-slate-800 text-slate-400 border border-slate-700 cursor-pointer hover:bg-slate-700';
+                }
+            }
+            if (currentTownshipId) loadTownship(currentTownshipId, true);
+        }
+
         function drawMapForTownship(tId) {
             const bounds = [];
             const data = mapData[tId];
@@ -451,6 +491,7 @@
 
             data.points.forEach(poi => {
                 const isDone = inspectionState[poi.id];
+                if (filterOnlyPending && isDone) return; // 隱藏已查報點位，畫面更清爽
                 const marker = L.marker([poi.lat, poi.lng], { icon: createPointIcon(isDone) }).addTo(map);
                 
                 marker.on('click', (e) => {
@@ -558,7 +599,7 @@
             finally { if(btn) btn.disabled = false; }
         }
 
-        function compressImageAsync(file, maxWidth = 1200, quality = 0.7) {
+        function compressImageAsync(file, meta = {}, maxWidth = 1200, quality = 0.7) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = function(e) {
@@ -579,6 +620,21 @@
                         canvas.height = h;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, w, h);
+
+                        // 專業浮水印：自動壓上地號與拍攝時間，交差查驗免對照
+                        const now = new Date();
+                        const timeStr = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+                        const tagText = `${meta.name || ''}  |  ${timeStr}`;
+                        
+                        const barHeight = Math.max(28, Math.round(h * 0.045));
+                        ctx.fillStyle = "rgba(15, 23, 42, 0.75)";
+                        ctx.fillRect(0, h - barHeight, w, barHeight);
+                        
+                        ctx.fillStyle = "#f8fafc";
+                        ctx.font = `bold ${Math.round(barHeight * 0.52)}px 'Noto Sans TC', sans-serif`;
+                        ctx.textBaseline = "middle";
+                        ctx.fillText(tagText, 12, h - (barHeight / 2));
+
                         resolve(canvas.toDataURL('image/jpeg', quality));
                     };
                     img.onerror = () => reject(new Error('圖片讀取解析失敗'));
@@ -595,13 +651,16 @@
 
             if (!inspectionPhotos[currentItemId]) inspectionPhotos[currentItemId] = [];
             const grid = document.getElementById('photo-preview-grid');
-            if(grid) grid.innerHTML += `<div class="col-span-3 text-center text-amber-400 text-sm py-2 font-bold animate-pulse" id="loading-txt"><i class="ph ph-spinner animate-spin"></i> 照片壓縮中 (0/${files.length})...</div>`;
+            if(grid) grid.innerHTML += `<div class="col-span-3 text-center text-amber-400 text-sm py-2 font-bold animate-pulse" id="loading-txt"><i class="ph ph-spinner animate-spin"></i> 照片浮水印與壓縮中 (0/${files.length})...</div>`;
+
+            const currentPointName = document.getElementById('sheet-title')?.innerText?.trim() || '';
+            const meta = { name: currentPointName, id: currentItemId };
 
             let count = 0;
             const fileList = Array.from(files);
             for (const file of fileList) {
                 try {
-                    const compressedDataUrl = await compressImageAsync(file, 1200, 0.7);
+                    const compressedDataUrl = await compressImageAsync(file, meta, 1200, 0.7);
                     inspectionPhotos[currentItemId].push({ 
                         id: Date.now() + '_' + Math.random().toString(36).substring(2, 7), 
                         data: compressedDataUrl, 
@@ -751,8 +810,26 @@
                 btn.innerHTML = '<i class="ph-fill ph-folder-notch text-lg text-amber-400"></i> 上傳建立資料夾並填表'; 
             }
             
+            if (successCount > 0) {
+                // 直覺效率：上傳照片成功後，自動打勾「已查報」！免去手動二次點擊
+                inspectionState[currentItemId] = true;
+                saveState();
+                
+                // 背景向 GAS 同步打勾狀態
+                fetch(GOOGLE_APP_SCRIPT_URL, {
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'set_status', itemId: currentItemId, isDone: true })
+                }).catch(e => console.warn("背景同步標記狀態失敗:", e));
+
+                const markBtn = document.getElementById('mark-btn');
+                const markText = document.getElementById('mark-text');
+                if (markBtn) markBtn.className = "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition-all bg-emerald-500/20 border-emerald-500 text-emerald-400 cursor-pointer mt-1";
+                if (markText) markText.innerText = "已查報";
+            }
+
             if (successCount === total) {
-                alert("✅ 照片已全數並行上傳成功，已於 Google Drive 建立資料夾並完成填表！");
+                alert("✅ 照片上傳成功！系統已自動標記為「已查報」，地圖圖釘已同步更新。");
             } else {
                 alert(`⚠️ 上傳完畢。成功: ${successCount} 張，失敗: ${total - successCount} 張。`);
             }
@@ -851,11 +928,12 @@
                 refGrid.innerHTML = '';
             }
             
+            const destinationQuery = encodeURIComponent(`${lat},${lng}`);
+            const openNav = () => { window.open(`https://www.google.com/maps/dir/?api=1&destination=${destinationQuery}`, '_blank'); };
             const navBtn = document.getElementById('nav-btn');
-            if (navBtn) {
-                const destinationQuery = encodeURIComponent(`${lat},${lng}`); 
-                navBtn.onclick = () => { window.open(`https://www.google.com/maps/dir/?api=1&destination=${destinationQuery}`, '_blank'); }; 
-            }
+            const navBtnTop = document.getElementById('nav-btn-top');
+            if (navBtn) navBtn.onclick = openNav;
+            if (navBtnTop) navBtnTop.onclick = openNav;
             
             const bs = document.getElementById('bottom-sheet');
             if (bs) bs.classList.remove('hidden-sheet');
@@ -864,6 +942,14 @@
         function hideBottomSheet() { 
             const bs = document.getElementById('bottom-sheet');
             if(!bs || bs.classList.contains('hidden-sheet')) return;
+
+            // 直覺防呆：若拍攝的照片尚未點擊上傳
+            if (currentItemId && inspectionPhotos[currentItemId] && inspectionPhotos[currentItemId].some(p => !p.uploaded)) {
+                if (!confirm("⚠️ 您目前拍攝的照片尚未上傳雲端！\n\n確定要離開嗎？（取消可點擊「上傳建立資料夾並填表」完成儲存）")) {
+                    return;
+                }
+            }
+
             bs.classList.add('hidden-sheet'); currentItemId = null;
         }
 
